@@ -190,6 +190,85 @@ def test_feedback_manager(tmp_path):
     assert analytics["usefulness_rate"] == "100.0%"
 
 
+def test_120_plus_crop_registry():
+    from app.crops.registry import CropRegistry
+    reg = CropRegistry()
+    crops = reg.list_crops()
+    assert len(crops) >= 120, f"Expected >= 120 crops, got {len(crops)}"
+
+    # Check categories
+    categories = {c.category for c in crops}
+    expected_categories = {"Cereals", "Millets", "Pulses", "Oilseeds", "Vegetables", "Fruits", "Spices", "Plantation", "Commercial", "Fodder"}
+    for exp_cat in expected_categories:
+        assert exp_cat in categories, f"Category '{exp_cat}' missing from registry"
+
+    # Search and alias lookup
+    mango = reg.get_crop("mango")
+    assert mango is not None
+    assert mango.name == "Mango"
+    assert "Mangifera" in mango.scientific_name
+
+    # Regional alias lookup
+    ragi = reg.get_crop("ragi")
+    assert ragi is not None
+    assert ragi.name == "Finger Millet"
+
+    # Category filter
+    veggies = reg.filter_by_category("Vegetables")
+    assert len(veggies) >= 20
+
+    # Stats
+    stats = reg.get_crop_stats()
+    assert stats["total_crops"] >= 120
+
+
+def test_pest_database_search():
+    from app.knowledge.pests import search_pests
+    rice_pests = search_pests(crop="Rice")
+    assert len(rice_pests) >= 2
+    pest_names = [p["name"] for p in rice_pests]
+    assert any("Stem Borer" in n for n in pest_names)
+
+
+def test_crops_cli_commands(capsys):
+    # 1. crops list
+    main(["crops", "list"])
+    out = capsys.readouterr().out
+    assert "Registered Crops" in out
+
+    # 2. crops search --query mango
+    main(["crops", "search", "--query", "mango"])
+    out = capsys.readouterr().out
+    assert "Mango" in out
+
+    # 3. crops category vegetables
+    main(["crops", "category", "Vegetables"])
+    out = capsys.readouterr().out
+    assert "Crops in category 'Vegetables'" in out
+
+    # 4. crops show --id tomato
+    main(["crops", "show", "--id", "tomato"])
+    out = capsys.readouterr().out
+    assert "CROP PROFILE: TOMATO" in out
+
+    # 5. crops stats
+    main(["crops", "stats"])
+    out = capsys.readouterr().out
+    assert "120+ CROP REGISTRY DATABASE STATISTICS" in out
+    assert "Total Unique Crops" in out
+
+    # 6. disease search --crop tomato
+    main(["disease", "search", "--crop", "tomato"])
+    out = capsys.readouterr().out
+    assert "INTEGRATED DISEASE KNOWLEDGE BASE (tomato)" in out
+
+    # 7. pest search --crop rice
+    main(["pest", "search", "--crop", "rice"])
+    out = capsys.readouterr().out
+    assert "AGRICULTURAL PEST & IPM DATABASE (rice)" in out
+    assert "Yellow Stem Borer" in out
+
+
 def test_cli_advanced_commands(capsys):
     # 1. records stats
     main(["records", "stats"])

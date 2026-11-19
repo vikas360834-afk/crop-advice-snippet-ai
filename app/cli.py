@@ -1,13 +1,15 @@
 """Comprehensive Command-Line Interface for Crop Advice Snippet AI.
 
 Supports:
+- crops: 120+ crop registry (list, search, category, show, stats)
+- disease: Disease lookup and IPM guidelines (search --crop <crop>)
+- pest: Pest database and IPM controls (search --crop <crop>)
 - advice: Context-aware advice generation using custom GPT
 - train: Train GPT language model from scratch on agricultural records
-- records: Record management (stats, list, search, show, add, delete, import, export)
+- records: Record management (stats, list, search, show, delete, import, export)
 - audit: Data health and integrity audit
 - weather: Meteorological risk assessment and crop advisory
 - soil: Soil test interpretation and crop suitability
-- disease: Disease and pest lookup with IPM guidelines
 - feedback: Farmer rating and feedback collection
 - stats: Legacy corpus statistics
 - interactive: Terminal-based assistant loop
@@ -27,9 +29,11 @@ from app.core import (
     load_or_train_model,
     query_crop_advice,
 )
-from app.crop_intel import check_soil_suitability, get_crop_profile, list_supported_crops
+from app.crop_intel import check_soil_suitability
+from app.crops.registry import CropRegistry
 from app.disease_db import DISCLAIMER as DISEASE_DISCLAIMER, search_diseases
 from app.feedback import FarmerFeedback, FeedbackManager
+from app.knowledge.pests import search_pests
 from app.records import AgriculturalRecord, RecordManager
 from app.soil_intel import SoilRecord
 from app.storage import Store
@@ -39,14 +43,52 @@ from app.weather_intel import WeatherRecord
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="crop-advice-snippet-ai",
-        description="Crop Advice Snippet AI: Context-aware agricultural intelligence powered by custom GPT trained from scratch.",
+        description="Crop Advice Snippet AI: Context-aware agricultural intelligence powered by custom GPT and 120+ crop registry.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     # 1. Hello
     sub.add_parser("hello", help="Check that everything is wired up")
 
-    # 2. Advice
+    # 2. Crops (120+ Crops Registry)
+    crops_p = sub.add_parser("crops", help="Multi-crop registry and agronomic search for 120+ crops")
+    crops_sub = crops_p.add_subparsers(dest="crop_action", required=True)
+
+    crops_list = crops_sub.add_parser("list", help="List registered crops")
+    crops_list.add_argument("--category", "-c", default=None, help="Filter by category")
+    crops_list.add_argument("--region", default=None, help="Filter by region")
+    crops_list.add_argument("--season", default=None, help="Filter by season")
+
+    crops_search = crops_sub.add_parser("search", help="Search crops by keyword or regional name")
+    crops_search.add_argument("--query", "-q", required=True, help="Search query (e.g. mango, ragi, jowar)")
+
+    crops_cat = crops_sub.add_parser("category", help="Filter crops by category")
+    crops_cat.add_argument("cat_name", help="Category (e.g. Cereals, Millets, Pulses, Vegetables, Fruits, Spices, Plantation)")
+
+    crops_show = crops_sub.add_parser("show", help="Display full agronomic profile for a crop")
+    crops_show.add_argument("--id", required=True, help="Crop ID or name (e.g. tomato, wheat, mango)")
+
+    crops_sub.add_parser("stats", help="Display crop database statistics across categories and seasons")
+
+    # 3. Disease lookup
+    dis_p = sub.add_parser("disease", help="Search disease IPM knowledge base")
+    dis_sub = dis_p.add_subparsers(dest="disease_action")
+    dis_search = dis_sub.add_parser("search", help="Search diseases by crop and symptoms")
+    dis_search.add_argument("--crop", default=None, help="Crop name")
+    dis_search.add_argument("--symptoms", default=None, help="Symptom keywords")
+    dis_p.add_argument("--crop", default=None, help="Crop name (direct)")
+    dis_p.add_argument("--symptoms", default=None, help="Symptoms (direct)")
+
+    # 4. Pest lookup
+    pest_p = sub.add_parser("pest", help="Search pest database and IPM methods")
+    pest_sub = pest_p.add_subparsers(dest="pest_action")
+    pest_search = pest_sub.add_parser("search", help="Search pests by crop")
+    pest_search.add_argument("--crop", default=None, help="Crop name")
+    pest_search.add_argument("--query", default=None, help="Pest symptoms or name query")
+    pest_p.add_argument("--crop", default=None, help="Crop name (direct)")
+    pest_p.add_argument("--query", default=None, help="Pest query (direct)")
+
+    # 5. Advice
     adv = sub.add_parser("advice", help="Generate concise context-aware advice for a crop")
     adv.add_argument("--crop", "-c", required=True, help="Crop name (e.g. Tomato, Wheat, Rice, Potato, Maize)")
     adv.add_argument("--problem", "-p", "--issue", dest="problem", default=None, help="Pest, disease, or problem")
@@ -57,13 +99,13 @@ def create_parser() -> argparse.ArgumentParser:
     adv.add_argument("--rainfall", default=None, help="Rainfall (e.g. heavy, drought)")
     adv.add_argument("--stage", default=None, help="Growth stage (e.g. flowering, seedling, grain-filling)")
 
-    # 3. Train
+    # 6. Train
     tr = sub.add_parser("train", help="Train the GPT model from scratch on agricultural knowledge records")
     tr.add_argument("--epochs", "-e", type=int, default=150, help="Training epochs (default: 150)")
     tr.add_argument("--lr", type=float, default=1e-3, help="Learning rate (default: 1e-3)")
     tr.add_argument("--batch-size", "-b", type=int, default=16, help="Batch size (default: 16)")
 
-    # 4. Records (Subcommands: stats, list, search, show, add, delete, import, export)
+    # 7. Records
     rec_parser = sub.add_parser("records", help="Agricultural knowledge records management")
     rec_sub = rec_parser.add_subparsers(dest="record_action", required=True)
 
@@ -74,7 +116,7 @@ def create_parser() -> argparse.ArgumentParser:
     rec_list.add_argument("--topic", default=None, help="Filter by topic")
     rec_list.add_argument("--region", default=None, help="Filter by region")
     rec_list.add_argument("--season", default=None, help="Filter by season")
-    rec_list.add_argument("--status", default=None, help="Filter by review status (verified, reviewed, pending, rejected)")
+    rec_list.add_argument("--status", default=None, help="Filter by review status")
 
     rec_search = rec_sub.add_parser("search", help="Search records using keyword query")
     rec_search.add_argument("--query", "-q", required=True, help="Search keywords")
@@ -86,43 +128,123 @@ def create_parser() -> argparse.ArgumentParser:
     rec_del.add_argument("--id", required=True, help="Record ID to delete")
     rec_del.add_argument("--yes", "-y", action="store_true", help="Confirm deletion without prompt")
 
-    # 5. Audit
+    # 8. Audit
     sub.add_parser("audit", help="Audit dataset health, schema validation, and review completeness")
 
-    # 6. Weather Risk Evaluation
+    # 9. Weather
     wth = sub.add_parser("weather", help="Evaluate meteorological risks for a crop")
     wth.add_argument("--crop", default="General", help="Crop name")
     wth.add_argument("--temp", "--temperature", dest="temp", type=float, default=25.0, help="Temperature in Celsius")
     wth.add_argument("--humidity", type=float, default=65.0, help="Relative humidity percentage")
     wth.add_argument("--rainfall", type=float, default=0.0, help="Rainfall in mm")
     wth.add_argument("--wind", type=float, default=8.0, help="Wind speed in km/h")
-    wth.add_argument("--forecast", action="store_true", help="Flag if values are forecasted rather than observed")
+    wth.add_argument("--forecast", action="store_true", help="Flag if values are forecasted")
 
-    # 7. Soil Intelligence
+    # 10. Soil
     soil_p = sub.add_parser("soil", help="Assess soil pH and suitability for a crop")
     soil_p.add_argument("--crop", required=True, help="Target crop")
     soil_p.add_argument("--ph", type=float, required=True, help="Soil pH (0-14)")
     soil_p.add_argument("--type", default="Loam", help="Soil texture (e.g. Sandy loam, Clay, Black soil)")
 
-    # 8. Disease lookup
-    dis_p = sub.add_parser("disease", help="Search disease and pest IPM guide")
-    dis_p.add_argument("--crop", default=None, help="Crop name")
-    dis_p.add_argument("--symptoms", default=None, help="Symptom keywords")
-
-    # 9. Feedback
+    # 11. Feedback
     fb = sub.add_parser("feedback", help="Submit or view farmer feedback and ratings")
     fb.add_argument("--crop", default=None, help="Crop name")
     fb.add_argument("--rating", type=int, choices=[1, 2, 3, 4, 5], default=None, help="Rating (1-5 stars)")
     fb.add_argument("--comment", default="", help="Farmer feedback comment")
     fb.add_argument("--stats", action="store_true", help="Display feedback analytics")
 
-    # 10. Legacy stats
+    # 12. Legacy stats
     sub.add_parser("stats", help="Display corpus statistics")
 
-    # 11. Interactive assistant
+    # 13. Interactive assistant
     sub.add_parser("interactive", help="Start interactive terminal advice assistant for farmers")
 
     return parser
+
+
+def handle_crops(args: argparse.Namespace) -> None:
+    registry = CropRegistry()
+
+    if args.crop_action == "list":
+        crops = registry.list_crops(category=args.category, region=args.region, season=args.season)
+        print(f"\nRegistered Crops ({len(crops)} total):\n")
+        print(f"{'ID':<18} | {'NAME':<20} | {'CATEGORY':<14} | {'SEASONS'}")
+        print("-" * 75)
+        for c in crops[:50]:
+            print(f"{c.id:<18} | {c.name:<20} | {c.category:<14} | {', '.join(c.seasons)}")
+        if len(crops) > 50:
+            print(f"... and {len(crops) - 50} more crops. Use 'crops search' or 'crops category' to filter.")
+        print()
+
+    elif args.crop_action == "search":
+        matched = registry.search_crops(args.query)
+        print(f"\nSearch for '{args.query}' returned {len(matched)} crops:\n")
+        for c in matched:
+            print(f"[{c.id}] {c.name} ({c.scientific_name}) - Category: {c.category}")
+            if c.common_indian_names:
+                print(f"  Aliases   : {', '.join(c.common_indian_names)}")
+            print(f"  Regions   : {', '.join(c.growing_regions[:4])}")
+            print(f"  Soil & pH : {c.soil_preferences.get('type', '')} (pH: {c.soil_preferences.get('ph_range', '')})")
+            print()
+
+    elif args.crop_action == "category":
+        crops = registry.filter_by_category(args.cat_name)
+        print(f"\nCrops in category '{args.cat_name}' ({len(crops)} total):\n")
+        for c in crops:
+            print(f"  - [{c.id:<18}] {c.name:<22} ({c.scientific_name})")
+        print()
+
+    elif args.crop_action == "show":
+        c = registry.get_crop(args.id)
+        if not c:
+            print(f"Error: Crop '{args.id}' not found in registry.")
+            return
+        print("\n" + "=" * 65)
+        print(f"CROP PROFILE: {c.name.upper()} ({c.scientific_name})")
+        print("=" * 65)
+        print(f"Crop ID         : {c.id}")
+        print(f"Category        : {c.category}")
+        if c.common_indian_names:
+            print(f"Common Names    : {', '.join(c.common_indian_names)}")
+        if c.regional_names:
+            print(f"Regional Names  : {c.regional_names}")
+        print(f"Growing Regions : {', '.join(c.growing_regions)}")
+        print(f"Seasons         : {', '.join(c.seasons)}")
+        if c.duration_days:
+            print(f"Crop Duration   : ~{c.duration_days} days")
+        print("-" * 65)
+        print(f"Soil Preference : {c.soil_preferences.get('type', '')} (Optimal pH: {c.soil_preferences.get('ph_range', '')})")
+        print(f"Water Demand    : {c.water_requirements}")
+        print(f"NPK Ratio       : {c.nutrient_requirements}")
+        if c.growth_stages:
+            print("\nKey Growth Stages:")
+            for idx, stage in enumerate(c.growth_stages, 1):
+                print(f"  {idx}. {stage}")
+        if c.common_diseases:
+            print(f"\nCommon Diseases : {', '.join(c.common_diseases)}")
+        if c.common_pests:
+            print(f"Common Pests    : {', '.join(c.common_pests)}")
+        if c.source_references:
+            print(f"\nSource Reference: {', '.join(c.source_references)}")
+        print("=" * 65 + "\n")
+
+    elif args.crop_action == "stats":
+        stats = registry.get_crop_stats()
+        print("\n" + "=" * 60)
+        print("120+ CROP REGISTRY DATABASE STATISTICS")
+        print("=" * 60)
+        print(f"Total Unique Crops      : {stats['total_crops']}")
+        print(f"Total Crop Categories   : {stats['categories_count']}")
+        print("\nCrops by Category:")
+        for cat, cnt in stats["crops_by_category"].items():
+            print(f"  - {cat:<22}: {cnt}")
+        print("\nCrops by Season:")
+        for sea, cnt in stats["crops_by_season"].items():
+            print(f"  - {sea:<22}: {cnt}")
+        print("\nTop Growing Regions (States):")
+        for reg, cnt in stats["top_regions"].items():
+            print(f"  - {reg:<22}: {cnt} crops")
+        print("=" * 60 + "\n")
 
 
 def handle_advice(args: argparse.Namespace) -> None:
@@ -157,6 +279,51 @@ def handle_advice(args: argparse.Namespace) -> None:
         print(f"Weather       : {result['weather']}")
     print("-" * 60)
     print(f"Advice Snippet:\n{result['advice']}")
+    print("=" * 60 + "\n")
+
+
+def handle_disease(args: argparse.Namespace) -> None:
+    crop = getattr(args, "crop", None)
+    symptoms = getattr(args, "symptoms", None)
+    results = search_diseases(crop=crop, symptoms_query=symptoms)
+    print("\n" + "=" * 60)
+    print("INTEGRATED PEST & DISEASE KNOWLEDGE BASE")
+    print(f"INTEGRATED DISEASE KNOWLEDGE BASE ({crop or 'All Crops'})")
+    print("-" * 60)
+    if not results:
+        print(f"No specific disease records found for crop '{crop}'. Consult local extension.")
+    for d in results:
+        print(f"[{d['id']}] {d['name']} ({d['causal_agent']})")
+        print(f"  Crop        : {d['crop']} | Parts: {d['plant_parts']}")
+        print(f"  Symptoms    : {d['symptoms']}")
+        print(f"  Environment : {d['favourable_conditions']}")
+        print(f"  IPM / Prev. : {d['ipm_prevention']}")
+        print(f"  Treatment   : {d['verified_treatment']}")
+        print(f"  Source      : {d['expert_source']}")
+        print()
+    print("-" * 60)
+    print(DISEASE_DISCLAIMER)
+    print("=" * 60 + "\n")
+
+
+def handle_pest(args: argparse.Namespace) -> None:
+    crop = getattr(args, "crop", None)
+    query = getattr(args, "query", None)
+    results = search_pests(crop=crop, query=query)
+    print("\n" + "=" * 60)
+    print(f"AGRICULTURAL PEST & IPM DATABASE ({crop or 'All Crops'})")
+    print("-" * 60)
+    if not results:
+        print(f"No specific pest records found for query. Showing general IPM guidelines.")
+    for p in results:
+        print(f"[{p['id']}] {p['name']} ({p['scientific_name']})")
+        print(f"  Crop        : {p['crop']} | Parts: {p['plant_parts']}")
+        print(f"  Symptoms    : {p['symptoms']}")
+        print(f"  Severity    : {p['severity']} | Weather: {p['favourable_conditions']}")
+        print(f"  IPM Methods : {p['ipm_methods']}")
+        print(f"  Treatment   : {p['verified_treatment']}")
+        print(f"  Source      : {p['source']}")
+        print()
     print("=" * 60 + "\n")
 
 
@@ -258,14 +425,6 @@ def handle_audit() -> None:
     print(f"Dataset Health Score   : {audit_res['health_score']}%")
     print(f"Validation Issues      : {audit_res['issue_count']}")
     print(f"Warnings               : {audit_res['warning_count']}")
-    if audit_res["issues"]:
-        print("\nIssues:")
-        for iss in audit_res["issues"]:
-            print(f"  [X] {iss}")
-    if audit_res["warnings"]:
-        print(f"\nSample Warnings ({min(3, len(audit_res['warnings']))} of {len(audit_res['warnings'])}):")
-        for w in audit_res["warnings"][:3]:
-            print(f"  [!] {w}")
     print("=" * 60 + "\n")
 
 
@@ -321,26 +480,6 @@ def handle_soil(args: argparse.Namespace) -> None:
     print("=" * 60 + "\n")
 
 
-def handle_disease(args: argparse.Namespace) -> None:
-    results = search_diseases(crop=args.crop, symptoms_query=args.symptoms)
-    print("\n" + "=" * 60)
-    print("INTEGRATED PEST & DISEASE KNOWLEDGE BASE")
-    print("-" * 60)
-    print(f"Found {len(results)} matching entries:\n")
-    for d in results:
-        print(f"[{d['id']}] {d['name']} ({d['causal_agent']})")
-        print(f"  Crop        : {d['crop']} | Parts: {d['plant_parts']}")
-        print(f"  Symptoms    : {d['symptoms']}")
-        print(f"  Environment : {d['favourable_conditions']}")
-        print(f"  IPM / Prev. : {d['ipm_prevention']}")
-        print(f"  Treatment   : {d['verified_treatment']}")
-        print(f"  Source      : {d['expert_source']}")
-        print()
-    print("-" * 60)
-    print(DISEASE_DISCLAIMER)
-    print("=" * 60 + "\n")
-
-
 def handle_feedback(args: argparse.Namespace) -> None:
     fb_mgr = FeedbackManager()
     store = Store()
@@ -353,9 +492,6 @@ def handle_feedback(args: argparse.Namespace) -> None:
         print(f"Total Feedback Submissions : {analytics['total_ratings']}")
         print(f"Average Star Rating        : {analytics['average_rating']} / 5.0")
         print(f"Usefulness Rate            : {analytics['usefulness_rate']}")
-        print("Rating Breakdown:")
-        for star, count in analytics["rating_distribution"].items():
-            print(f"  {star} Stars: {'*' * count} ({count})")
         print("=" * 60 + "\n")
         return
 
@@ -370,7 +506,6 @@ def handle_feedback(args: argparse.Namespace) -> None:
         )
         fb_mgr.add(record)
 
-        # Also preserve in Store for backward compatibility
         fb_key = f"feedback_{args.crop.lower()}"
         existing = store.get(fb_key, [])
         existing.append({"rating": args.rating, "comment": args.comment})
@@ -425,6 +560,12 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if args.command == "hello":
         print("Crop Advice Snippet AI is ready. Open README.md for your milestones.")
+    elif args.command == "crops":
+        handle_crops(args)
+    elif args.command == "disease":
+        handle_disease(args)
+    elif args.command == "pest":
+        handle_pest(args)
     elif args.command == "advice":
         handle_advice(args)
     elif args.command == "train":
@@ -437,8 +578,6 @@ def main(argv: Optional[List[str]] = None) -> None:
         handle_weather(args)
     elif args.command == "soil":
         handle_soil(args)
-    elif args.command == "disease":
-        handle_disease(args)
     elif args.command == "feedback":
         handle_feedback(args)
     elif args.command == "stats":
