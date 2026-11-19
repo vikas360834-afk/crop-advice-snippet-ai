@@ -1,10 +1,10 @@
 """Crop Advice Snippet AI core implementation.
 
-Contains:
-1. Agricultural corpus collection & preprocessing
+Features:
+1. Agricultural corpus collection & preprocessing with rich JSONL records
 2. Byte-Pair Encoding (BPE) tokenizer and embedding generation
 3. Causal self-attention, transformer blocks, and GPT model architecture
-4. GPT training loop with checkpointing
+4. Advanced GPT training loop (Train/Val split, AdamW, LR scheduler, checkpointing, history export)
 5. Text generation for concise agricultural advice snippets
 6. CLI support and milestone handlers
 """
@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -21,10 +22,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from app.records import DEFAULT_RECORDS_PATH, RecordManager
+
 # Default path constants
 CORPUS_DEFAULT_PATH = Path("data/agricultural_corpus.txt")
 TOKENIZER_DEFAULT_PATH = Path("data/bpe_tokenizer.json")
 MODEL_DEFAULT_PATH = Path("data/gpt_crop_advice.pt")
+TRAINING_HISTORY_PATH = Path("data/training_history.json")
 
 
 # =====================================================================
@@ -143,19 +147,9 @@ DEFAULT_AGRICULTURAL_CORPUS = [
         "advice": "Apply agricultural limestone 3 to 4 weeks before planting. Band diammonium phosphate (DAP) 5 cm beside and below seed rows.",
     },
     {
-        "crop": "Maize",
-        "context": "stalk rot, high plant density",
-        "advice": "Maintain balanced potassium fertilization to fortify rind strength. Avoid plant density above 75000 plants per hectare in dryland regions.",
-    },
-    {
         "crop": "Cotton",
         "context": "bollworm infestation, square shedding",
         "advice": "Set pheromone traps and monitor egg counts on tender terminals. Rotate spinosad, indoxacarb, and Bt sprays to delay pest resistance.",
-    },
-    {
-        "crop": "Cotton",
-        "context": "verticillium wilt, wet soil",
-        "advice": "Perform summer deep tillage and sow resistant cultivars. Avoid flood irrigation and space rows widely for airflow.",
     },
     {
         "crop": "Cotton",
@@ -163,29 +157,9 @@ DEFAULT_AGRICULTURAL_CORPUS = [
         "advice": "Apply flonicamid or dinotefuran at economic threshold. Intercrop with cowpea or maize border rows to attract beneficial ladybird beetles.",
     },
     {
-        "crop": "Cotton",
-        "context": "defoliation, harvest preparation",
-        "advice": "Apply ethephon with thidiazuron defoliant when 60% of bolls are open to achieve clean, uniform harvesting.",
-    },
-    {
         "crop": "Soybean",
         "context": "rust, humid cloudy weather",
         "advice": "Apply strobilurin plus triazole premix at R1 to R3 reproductive stages. Inspect lower canopies early for tiny tan pustules.",
-    },
-    {
-        "crop": "Soybean",
-        "context": "inoculant, nodulation failure",
-        "advice": "Treat seeds with fresh Bradyrhizobium japonicum inoculum before sowing. Keep treated seeds away from heat and acidic fertilizers.",
-    },
-    {
-        "crop": "Soybean",
-        "context": "pod borer, flowering stage",
-        "advice": "Spray chlorantraniliprole at flower and pod development. Protect natural egg parasitoids like Trichogramma by minimizing broad pyrethroids.",
-    },
-    {
-        "crop": "Soybean",
-        "context": "iron deficiency chlorosis, calcareous soil",
-        "advice": "Choose IDC-tolerant varieties on calcareous soils and apply ortho-ortho Fe-EDDHA chelate in furrow at planting.",
     },
     {
         "crop": "Apple",
@@ -193,29 +167,9 @@ DEFAULT_AGRICULTURAL_CORPUS = [
         "advice": "Apply protective captan or dodine prior to rain events between green tip and petal fall. Flail mow fallen leaves in autumn.",
     },
     {
-        "crop": "Apple",
-        "context": "codling moth, fruit entry",
-        "advice": "Use pheromone traps to calculate degree-day biofix. Apply granulovirus (CpGV) or chlorantraniliprole before newly hatched larvae bore into fruit.",
-    },
-    {
-        "crop": "Apple",
-        "context": "bitter pit, calcium deficiency",
-        "advice": "Apply 4 to 6 foliar sprays of calcium chloride from fruitlet stage to harvest. Prune moderately to reduce vegetative competition for calcium.",
-    },
-    {
-        "crop": "Coffee",
-        "context": "coffee berry borer, harvest season",
-        "advice": "Conduct thorough strip harvesting of ripe, overripe, and fallen berries. Deploy alcohol-baited traps at 20 traps per hectare.",
-    },
-    {
         "crop": "Coffee",
         "context": "coffee leaf rust, wet conditions",
         "advice": "Spray preventive 0.5% Bordeaux mixture before monsoon onset, followed by copper oxychloride or epoxiconazole at first sign of orange spots.",
-    },
-    {
-        "crop": "Coffee",
-        "context": "shade management, agroforestry",
-        "advice": "Regulate shade tree canopy to provide 30 to 40% filtered light. This balances photosynthesis, reduces rust severity, and buffers temperature fluctuations.",
     },
     {
         "crop": "Sugarcane",
@@ -223,14 +177,9 @@ DEFAULT_AGRICULTURAL_CORPUS = [
         "advice": "Use certified disease-free setts from hot-water treated nurseries (52 deg C for 30 minutes). Rogue out infected clumps promptly.",
     },
     {
-        "crop": "Sugarcane",
-        "context": "early shoot borer, dry hot weather",
-        "advice": "Apply chlorpyrifos or fipronil granules at planting or 35 days post-planting followed by light earthing-up over the root band.",
-    },
-    {
-        "crop": "Sugarcane",
-        "context": "trash mulching, soil conservation",
-        "advice": "Spread dried sugarcane trash at 3 to 5 tons per hectare between rows to conserve moisture, prevent weeds, and improve soil organic carbon.",
+        "crop": "Banana",
+        "context": "sigatoka leaf spot, high humidity",
+        "advice": "De-leaf spotted leaves promptly to reduce airborne inoculum and spray propiconazole 25 EC mixed with mineral oil.",
     },
 ]
 
@@ -248,6 +197,38 @@ def build_raw_corpus_text(entries: Optional[List[Dict[str, str]]] = None) -> str
     entries = entries or DEFAULT_AGRICULTURAL_CORPUS
     lines = [format_advice_entry(e) for e in entries]
     return "\n".join(lines) + "\n"
+
+
+def build_training_text_from_records(
+    records_path: Path | str = DEFAULT_RECORDS_PATH,
+    exclude_rejected: bool = True,
+    prioritize_reviewed: bool = True,
+) -> str:
+    """Convert structured agricultural records into consistent training text.
+    
+    Filters out rejected records and safely includes weather, soil, growth stage,
+    and source attribution.
+    """
+    p = Path(records_path)
+    if not p.exists():
+        return load_or_create_corpus()
+
+    mgr = RecordManager(p)
+    records = list(mgr.records.values())
+
+    if exclude_rejected:
+        records = [r for r in records if r.review_status != "rejected"]
+
+    if prioritize_reviewed:
+        # Sort so verified/reviewed come first
+        priority_map = {"verified": 0, "reviewed": 1, "pending": 2}
+        records.sort(key=lambda r: priority_map.get(r.review_status, 3))
+
+    lines = [r.to_training_text() for r in records]
+    # Also append the base corpus lines for maximum coverage
+    base_text = load_or_create_corpus()
+    combined = "\n".join(lines) + "\n" + base_text
+    return combined
 
 
 def load_or_create_corpus(path: Path | str = CORPUS_DEFAULT_PATH) -> str:
@@ -268,8 +249,9 @@ def get_corpus_statistics(text: str) -> Dict[str, Any]:
     lines = [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
     crops = set()
     for line in lines:
-        if "[CROP:" in line and "|" in line:
-            crop_part = line.split("[CROP:")[1].split("|")[0].strip()
+        if "[CROP:" in line:
+            after_crop = line.split("[CROP:")[1]
+            crop_part = after_crop.split("|")[0].split("]")[0].strip()
             crops.add(crop_part)
     words = text.split()
     return {
@@ -304,7 +286,7 @@ class BPETokenizer:
     vocabulary and out-of-vocabulary characters. Learns merge rules iteratively
     over frequent adjacent pairs.
     """
-    
+
     SPECIAL_TOKENS = {
         "<pad>": 0,
         "<unk>": 1,
@@ -376,10 +358,8 @@ class BPETokenizer:
             stats = self.get_stats(ids)
             if not stats:
                 break
-            # Find the most frequent pair (break ties deterministically)
             best_pair = max(stats.items(), key=lambda item: (item[1], -item[0][0], -item[0][1]))[0]
             if stats[best_pair] < 2:
-                # No repeating pair to merge
                 break
             new_id = len(self.vocab)
             self.merges[best_pair] = new_id
@@ -397,7 +377,6 @@ class BPETokenizer:
 
         while len(ids) >= 2:
             stats = self.get_stats(ids)
-            # Find candidate merge with smallest rank (earliest created)
             candidates = {pair: self.merges[pair] for pair in stats if pair in self.merges}
             if not candidates:
                 break
@@ -464,11 +443,6 @@ class EmbeddingLayer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, idx: torch.Tensor) -> torch.Tensor:
-        """Args:
-            idx: LongTensor of shape (batch_size, seq_len)
-        Returns:
-            Tensor of shape (batch_size, seq_len, n_embd)
-        """
         b, t = idx.shape
         if t > self.block_size:
             raise ValueError(f"Sequence length {t} exceeds block size {self.block_size}")
@@ -479,14 +453,14 @@ class EmbeddingLayer(nn.Module):
         return self.dropout(x)
 
 
-def get_trained_tokenizer(corpus_text: Optional[str] = None, vocab_size: int = 400) -> BPETokenizer:
+def get_trained_tokenizer(corpus_text: Optional[str] = None, vocab_size: int = 420) -> BPETokenizer:
     """Helper to train or load a BPE tokenizer on the agricultural text."""
     if TOKENIZER_DEFAULT_PATH.exists():
         tok = BPETokenizer(vocab_size=vocab_size)
         tok.load(TOKENIZER_DEFAULT_PATH)
         return tok
     if corpus_text is None:
-        corpus_text = load_or_create_corpus()
+        corpus_text = build_training_text_from_records()
     tok = BPETokenizer(vocab_size=vocab_size)
     tok.train(corpus_text)
     tok.save(TOKENIZER_DEFAULT_PATH)
@@ -502,7 +476,6 @@ def milestone_2() -> Dict[str, Any]:
     token_ids = tokenizer.encode(sample_text)
     decoded_text = tokenizer.decode(token_ids)
 
-    # Generate embeddings
     n_embd = 64
     block_size = 128
     emb_layer = EmbeddingLayer(vocab_size=tokenizer.vocab_size, n_embd=n_embd, block_size=block_size)
@@ -535,35 +508,27 @@ class CausalSelfAttention(nn.Module):
         self.head_dim = n_embd // n_head
         self.block_size = block_size
 
-        # Key, Query, Value projections in a single linear layer
         self.c_attn = nn.Linear(n_embd, 3 * n_embd)
-        # Output projection
         self.c_proj = nn.Linear(n_embd, n_embd)
-        # Regularization
         self.attn_dropout = nn.Dropout(dropout)
         self.resid_dropout = nn.Dropout(dropout)
 
-        # Causal mask ensures token i can only attend to tokens <= i
         mask = torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size)
         self.register_buffer("bias", mask)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, t, c = x.shape
-        # Calculate Q, K, V
         q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        # Reshape to (b, n_head, t, head_dim)
         k = k.view(b, t, self.n_head, self.head_dim).transpose(1, 2)
         q = q.view(b, t, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(b, t, self.n_head, self.head_dim).transpose(1, 2)
 
-        # Scaled dot-product attention
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
         att = att.masked_fill(self.bias[:, :, :t, :t] == 0, float("-inf"))
         att = F.softmax(att, dim=-1)
         att = self.attn_dropout(att)
 
-        y = att @ v  # (b, n_head, t, head_dim)
-        # Re-assemble all head outputs
+        y = att @ v
         y = y.transpose(1, 2).contiguous().view(b, t, c)
         return self.resid_dropout(self.c_proj(y))
 
@@ -626,7 +591,6 @@ class GPTLanguageModel(nn.Module):
         ])
         self.ln_f = nn.LayerNorm(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size, bias=False)
-        # Weight tying
         self.lm_head.weight = self.wte.weight
 
         self.apply(self._init_weights)
@@ -641,6 +605,9 @@ class GPTLanguageModel(nn.Module):
         elif isinstance(module, nn.LayerNorm):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
+
+    def count_parameters(self) -> int:
+        return sum(p.numel() for p in self.parameters())
 
     def forward(
         self, idx: torch.Tensor, targets: Optional[torch.Tensor] = None
@@ -677,16 +644,13 @@ def milestone_3() -> Dict[str, Any]:
     batch_size = 2
     seq_len = 16
 
-    # Instantiate and test causal self-attention
     csa = CausalSelfAttention(n_embd=n_embd, n_head=n_head, block_size=block_size)
     dummy_x = torch.randn(batch_size, seq_len, n_embd)
     csa_out = csa(dummy_x)
 
-    # Instantiate and test transformer block
     block = TransformerBlock(n_embd=n_embd, n_head=n_head, block_size=block_size)
     block_out = block(dummy_x)
 
-    # Instantiate full GPT model
     gpt = GPTLanguageModel(vocab_size=300, n_embd=n_embd, n_head=n_head, n_layer=2, block_size=block_size)
     dummy_tokens = torch.randint(0, 300, (batch_size, seq_len))
     logits, _ = gpt(dummy_tokens)
@@ -700,7 +664,7 @@ def milestone_3() -> Dict[str, Any]:
 
 
 # =====================================================================
-# MILESTONE 4: GPT Model Training Loop
+# MILESTONE 4: Advanced GPT Training Loop & Evaluation
 # =====================================================================
 
 class AgriculturalDataset:
@@ -713,8 +677,7 @@ class AgriculturalDataset:
     def get_batch(self, batch_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
         max_idx = len(self.data) - self.block_size - 1
         if max_idx <= 0:
-            # Replicate data if short
-            repeats = (self.block_size * 2 + 1) // len(self.data) + 1
+            repeats = (self.block_size * 2 + 1) // max(1, len(self.data)) + 1
             data = self.data.repeat(repeats)
             max_idx = len(data) - self.block_size - 1
         else:
@@ -732,31 +695,62 @@ def train_gpt_model(
     epochs: int = 150,
     batch_size: int = 8,
     lr: float = 1e-3,
+    weight_decay: float = 1e-2,
+    seed: int = 42,
     save_path: Optional[Path | str] = None,
 ) -> Dict[str, Any]:
-    """Train the GPT model using cross-entropy loss and AdamW."""
-    model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
-    dataset = AgriculturalDataset(train_tokens, block_size=model.block_size)
+    """Advanced GPT Training loop with validation loss, learning rate scheduling, and history export."""
+    torch.manual_seed(seed)
+    start_time = time.time()
 
-    losses = []
+    # Train / validation split if val_tokens not provided
+    if val_tokens is None and len(train_tokens) > 200:
+        split_idx = int(len(train_tokens) * 0.85)
+        val_tokens = train_tokens[split_idx:]
+        train_tokens = train_tokens[:split_idx]
+
+    train_ds = AgriculturalDataset(train_tokens, block_size=model.block_size)
+    val_ds = AgriculturalDataset(val_tokens, block_size=model.block_size) if val_tokens else None
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs), eta_min=1e-5)
+
+    model.train()
+    train_losses = []
+    val_losses = []
     initial_loss = None
-    final_loss = None
+    best_val_loss = float("inf")
 
     for step in range(epochs):
-        x, y = dataset.get_batch(batch_size)
+        x, y = train_ds.get_batch(batch_size)
         optimizer.zero_grad()
         _, loss = model(x, y)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
+        scheduler.step()
 
         loss_val = float(loss.item())
         if initial_loss is None:
             initial_loss = loss_val
-        final_loss = loss_val
-        losses.append(loss_val)
+        train_losses.append(loss_val)
 
+        # Validation evaluation every 20 epochs or at end
+        if val_ds and (step % 20 == 0 or step == epochs - 1):
+            model.eval()
+            with torch.no_grad():
+                vx, vy = val_ds.get_batch(min(batch_size, 4))
+                _, v_loss = model(vx, vy)
+                v_loss_val = float(v_loss.item())
+                val_losses.append((step, v_loss_val))
+                if v_loss_val < best_val_loss and save_path:
+                    best_val_loss = v_loss_val
+            model.train()
+
+    elapsed = round(time.time() - start_time, 2)
+    final_loss = train_losses[-1] if train_losses else initial_loss
+
+    # Checkpoint save
     if save_path:
         p = Path(save_path)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -766,16 +760,59 @@ def train_gpt_model(
                 "vocab_size": model.vocab_size,
                 "n_embd": model.n_embd,
                 "block_size": model.block_size,
+                "parameters_count": model.count_parameters(),
+                "final_train_loss": final_loss,
+                "best_val_loss": best_val_loss if val_ds else final_loss,
             },
             str(p),
         )
 
+    # Save training history
+    history = {
+        "parameters_count": model.count_parameters(),
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "learning_rate": lr,
+        "training_duration_seconds": elapsed,
+        "initial_loss": initial_loss,
+        "final_loss": final_loss,
+        "val_losses": val_losses,
+    }
+    TRAINING_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    TRAINING_HISTORY_PATH.write_text(json.dumps(history, indent=2), encoding="utf-8")
+
     return {
         "initial_loss": initial_loss,
         "final_loss": final_loss,
-        "loss_history": losses,
+        "loss_history": train_losses,
+        "val_losses": val_losses,
         "epochs": epochs,
+        "parameters_count": model.count_parameters(),
+        "duration_seconds": elapsed,
     }
+
+
+def evaluate_model_on_prompts(
+    model: GPTLanguageModel,
+    tokenizer: BPETokenizer,
+    test_prompts: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Evaluate generated advice quality on held-out test prompts."""
+    prompts = test_prompts or [
+        "[CROP: Tomato | CONTEXT: early blight] ADVICE:",
+        "[CROP: Wheat | CONTEXT: rust disease] ADVICE:",
+        "[CROP: Rice | CONTEXT: blast disease] ADVICE:",
+        "[CROP: Maize | CONTEXT: fall armyworm] ADVICE:",
+    ]
+    results = []
+    for p in prompts:
+        gen = generate_text(model, tokenizer, p, max_new_tokens=40, temperature=0.2)
+        results.append({
+            "prompt": p,
+            "generated": gen,
+            "length": len(gen),
+        })
+    return results
 
 
 def load_or_train_model(
@@ -786,7 +823,7 @@ def load_or_train_model(
 ) -> Tuple[GPTLanguageModel, BPETokenizer]:
     """Load an existing model checkpoint or train a fresh one."""
     path = Path(model_path)
-    corpus = corpus_text or load_or_create_corpus()
+    corpus = corpus_text or build_training_text_from_records()
     tokenizer = get_trained_tokenizer(corpus, vocab_size=380)
 
     block_size = 64
@@ -828,7 +865,6 @@ def milestone_4() -> Dict[str, Any]:
         block_size=48,
     )
 
-    # Train for a quick demonstration
     train_result = train_gpt_model(model, tokens, epochs=50, batch_size=8, lr=2e-3)
     loss_reduction = train_result["initial_loss"] - train_result["final_loss"]
 
@@ -838,6 +874,7 @@ def milestone_4() -> Dict[str, Any]:
         "final_loss": train_result["final_loss"],
         "loss_reduction": loss_reduction,
         "epochs": train_result["epochs"],
+        "parameters_count": train_result["parameters_count"],
     }
 
 
@@ -868,10 +905,8 @@ def generate_text(
 
     with torch.no_grad():
         for _ in range(max_new_tokens):
-            # Crop to block size if needed
             idx_cond = idx if idx.size(1) <= model.block_size else idx[:, -model.block_size :]
             logits, _ = model(idx_cond)
-            # Take logits of the last token
             logits = logits[:, -1, :] / max(temperature, 1e-5)
 
             if top_k is not None and top_k > 0:
@@ -885,7 +920,6 @@ def generate_text(
             generated_ids.append(next_token)
             idx = torch.cat((idx, idx_next), dim=1)
 
-            # Check for EOS or stop condition
             if next_token == BPETokenizer.SPECIAL_TOKENS["<eos>"]:
                 break
 
@@ -904,15 +938,35 @@ def generate_advice_snippet(
     context: Optional[str] = None,
     soil: Optional[str] = None,
     weather: Optional[str] = None,
+    growth_stage: Optional[str] = None,
     max_new_tokens: int = 60,
     temperature: float = 0.3,
 ) -> str:
     """Generate a clean, concise agricultural advice snippet for a specific crop and context."""
     crop_clean = crop.strip().title()
-    matching_entries = [
-        e for e in DEFAULT_AGRICULTURAL_CORPUS
-        if e["crop"].lower() == crop.strip().lower()
-    ]
+
+    # Attempt to locate source-backed knowledge from records first
+    rec_mgr = RecordManager()
+    records_match = rec_mgr.list_all(crop=crop_clean)
+
+    best_record = None
+    if records_match:
+        search_terms = f"{context or ''} {soil or ''} {weather or ''} {growth_stage or ''}".lower()
+        if search_terms.strip():
+            scored = [
+                (
+                    sum(1 for w in search_terms.split() if w in f"{r.topic} {r.symptoms} {r.advice} {r.weather} {r.soil_type}".lower()),
+                    r,
+                )
+                for r in records_match
+            ]
+            scored.sort(key=lambda item: item[0], reverse=True)
+            if scored and scored[0][0] > 0:
+                best_record = scored[0][1]
+        if best_record is None:
+            best_record = records_match[0]
+
+    matching_entries = [e for e in DEFAULT_AGRICULTURAL_CORPUS if e["crop"].lower() == crop_clean.lower()]
 
     ctx_str = None
     best_entry = None
@@ -921,10 +975,7 @@ def generate_advice_snippet(
         if search_terms.strip():
             scored = [
                 (
-                    sum(
-                        1 for word in search_terms.split()
-                        if word in e["context"].lower() or word in e["advice"].lower()
-                    ),
+                    sum(1 for word in search_terms.split() if word in e["context"].lower() or word in e["advice"].lower()),
                     e,
                 )
                 for e in matching_entries
@@ -945,6 +996,8 @@ def generate_advice_snippet(
             context_parts.append(f"{soil.strip()} soil")
         if weather:
             context_parts.append(f"{weather.strip()} conditions")
+        if growth_stage:
+            context_parts.append(f"stage: {growth_stage.strip()}")
         ctx_str = ", ".join(context_parts) if context_parts else "farming best practices"
 
     prompt = f"[CROP: {crop_clean} | CONTEXT: {ctx_str}] ADVICE:"
@@ -958,35 +1011,47 @@ def generate_advice_snippet(
         top_k=5,
     )
 
-    # Clean and extract snippet
     if "ADVICE:" in generated:
         snippet = generated.split("ADVICE:")[1].strip()
     else:
         snippet = generated[len(prompt):].strip()
 
-    # Split on newline or next crop delimiter
     for delimiter in ["[CROP:", "\n"]:
         if delimiter in snippet:
             snippet = snippet.split(delimiter)[0].strip()
 
-    # Keep only complete sentence(s) if multiple punctuation marks exist
     if "." in snippet:
-        # cut off at the last period
         last_period_idx = snippet.rfind(".")
         snippet = snippet[: last_period_idx + 1].strip()
 
-    # Validate output coherence; if snippet is unviable or fragmented, use the best entry advice
     def _is_coherent(s: str) -> bool:
         if len(s) < 20:
             return False
-        words = s.split()
+        words = [w.strip(".,;:!?()[]") for w in s.split() if w.strip(".,;:!?()[]")]
         if len(words) < 4:
             return False
-        # Check that words contain common alphabetic agricultural words
-        return any(len(w) >= 3 and w.isalpha() for w in words)
+        # Reject heavy repetitions or repeated colons
+        if s.count(":") > 2:
+            return False
+        unique_words = set(w.lower() for w in words)
+        if len(unique_words) / len(words) < 0.55:
+            return False
+        # Reject garbled uppercase tokens or character repetitions
+        for w in words:
+            if len(w) > 4 and len(set(w)) <= 3:
+                return False
+        # Check that common agricultural or English words appear
+        common_agri_words = {
+            "apply", "spray", "water", "soil", "irrigate", "crop", "leaves", "disease",
+            "avoid", "maintain", "use", "prune", "prevent", "seed", "plant", "fertilizer",
+            "drip", "moisture", "fungicide", "nitrogen", "calcium", "boron", "harvest"
+        }
+        return any(w.lower() in common_agri_words for w in words)
 
     if not _is_coherent(snippet):
-        if best_entry:
+        if best_record:
+            snippet = best_record.advice
+        elif best_entry:
             snippet = best_entry["advice"]
         elif matching_entries:
             snippet = matching_entries[0]["advice"]
@@ -1019,6 +1084,7 @@ def query_crop_advice(
     problem: Optional[str] = None,
     soil: Optional[str] = None,
     weather: Optional[str] = None,
+    growth_stage: Optional[str] = None,
     model_path: Path | str = MODEL_DEFAULT_PATH,
 ) -> Dict[str, Any]:
     """High-level query function to get advice for a crop given farmer conditions."""
@@ -1030,12 +1096,14 @@ def query_crop_advice(
         context=problem,
         soil=soil,
         weather=weather,
+        growth_stage=growth_stage,
     )
     return {
         "crop": crop,
         "problem": problem or "general",
         "soil": soil or "standard",
         "weather": weather or "standard",
+        "growth_stage": growth_stage or "all stages",
         "advice": snippet,
     }
 

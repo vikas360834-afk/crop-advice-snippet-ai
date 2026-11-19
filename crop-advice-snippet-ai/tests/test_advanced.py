@@ -1,0 +1,237 @@
+"""Unit tests for Advanced Agricultural Records and Intelligence modules."""
+
+import pytest
+
+from app.cli import main
+from app.crop_intel import check_soil_suitability, get_crop_profile, list_supported_crops
+from app.disease_db import DISCLAIMER, search_diseases
+from app.feedback import FarmerFeedback, FeedbackManager
+from app.records import AgriculturalRecord, RecordManager
+from app.soil_intel import SoilRecord
+from app.weather_intel import WeatherRecord
+
+
+def test_agricultural_record_validation():
+    # Valid record
+    rec = AgriculturalRecord(
+        id="test-001",
+        crop="Wheat",
+        topic="Disease",
+        advice="Apply fungicide.",
+        source_name="ICAR",
+        source_url="https://icar.gov.in/wheat",
+        soil_ph=6.5,
+        confidence=0.92,
+        severity="High",
+        review_status="verified",
+    )
+    assert rec.crop == "Wheat"
+    assert rec.soil_ph == 6.5
+
+    # Invalid pH
+    with pytest.raises(ValueError, match="Soil pH must be between"):
+        AgriculturalRecord(
+            id="bad-ph",
+            crop="Rice",
+            topic="Soil",
+            advice="Test",
+            source_name="ICAR",
+            soil_ph=15.5,
+        )
+
+    # Invalid confidence
+    with pytest.raises(ValueError, match="Confidence score must be between"):
+        AgriculturalRecord(
+            id="bad-conf",
+            crop="Rice",
+            topic="Soil",
+            advice="Test",
+            source_name="ICAR",
+            confidence=1.5,
+        )
+
+    # Invalid URL
+    with pytest.raises(ValueError, match="Invalid source URL format"):
+        AgriculturalRecord(
+            id="bad-url",
+            crop="Rice",
+            topic="Soil",
+            advice="Test",
+            source_name="ICAR",
+            source_url="not-a-valid-url",
+        )
+
+
+def test_record_manager_operations(tmp_path):
+    storage_path = tmp_path / "test_records.jsonl"
+    mgr = RecordManager(storage_path)
+
+    r1 = AgriculturalRecord(
+        id="r-001",
+        crop="Tomato",
+        topic="Blight Management",
+        advice="Use copper spray.",
+        source_name="IIVR",
+        source_url="https://iivr.icar.gov.in/tomato",
+        region="North India",
+        season="Rabi",
+    )
+    r2 = AgriculturalRecord(
+        id="r-002",
+        crop="Rice",
+        topic="Water Management",
+        advice="Practice AWD.",
+        source_name="NRRI",
+        source_url="https://nrri.icar.gov.in/rice",
+        region="East India",
+        season="Kharif",
+    )
+    mgr.add(r1)
+    mgr.add(r2)
+
+    # Retrieve
+    assert mgr.get("r-001") is not None
+    assert mgr.get("r-001").crop == "Tomato"
+
+    # Search & filters
+    assert len(mgr.list_all(crop="Tomato")) == 1
+    assert len(mgr.list_all(season="Kharif")) == 1
+    assert len(mgr.search("copper")) == 1
+
+    # Analytics
+    analytics = mgr.get_analytics()
+    assert analytics["total_records"] == 2
+    assert analytics["total_crops"] == 2
+
+    # Audit
+    audit_res = mgr.audit()
+    assert audit_res["total_audited"] == 2
+    assert audit_res["health_score"] == 100.0
+
+    # Delete
+    assert mgr.delete("r-001") is True
+    assert mgr.get("r-001") is None
+
+
+def test_crop_intelligence():
+    wheat = get_crop_profile("Wheat")
+    assert wheat is not None
+    assert "DBW 187" in wheat["varieties"]
+    assert len(wheat["growth_stages"]) >= 5
+
+    # Soil suitability
+    res = check_soil_suitability("Wheat", soil_ph=6.8, soil_type="Loam")
+    assert res["ph_suitable"] is True
+
+    # Acidic check
+    res_acidic = check_soil_suitability("Wheat", soil_ph=4.5, soil_type="Red soil")
+    assert res_acidic["ph_suitable"] is False
+
+
+def test_disease_database():
+    results = search_diseases(crop="Tomato", symptoms_query="concentric rings")
+    assert len(results) > 0
+    assert results[0]["name"] == "Early Blight"
+    assert "Alternaria" in results[0]["causal_agent"]
+    assert "DISCLAIMER" in DISCLAIMER
+
+
+def test_weather_intelligence():
+    # Fungal risk test
+    w = WeatherRecord(
+        id="w-01",
+        location="Farm 1",
+        date="2026-04-10",
+        temperature_c=22.0,
+        humidity_pct=92.0,
+        rainfall_mm=2.0,
+        wind_speed_kmh=8.0,
+    )
+    risks = w.assess_crop_risks("Tomato")
+    assert any("Fungal" in r for r in risks["risks_identified"])
+
+    # High wind test
+    w_wind = WeatherRecord(
+        id="w-02",
+        location="Farm 1",
+        date="2026-04-10",
+        temperature_c=25.0,
+        humidity_pct=50.0,
+        wind_speed_kmh=22.0,
+    )
+    risks_wind = w_wind.assess_crop_risks("Wheat")
+    assert "UNFAVOURABLE" in risks_wind["spray_suitability"]
+
+
+def test_soil_intelligence():
+    soil = SoilRecord(
+        id="s-01",
+        field_name="Plot A",
+        location="Varanasi",
+        soil_type="Alluvial loam",
+        soil_ph=8.2,
+        organic_carbon_pct=0.4,
+    )
+    fertility = soil.evaluate_fertility()
+    assert "Alkaline" in fertility["ph_status"]
+    assert "Low" in fertility["organic_carbon"]
+
+
+def test_feedback_manager(tmp_path):
+    fb_path = tmp_path / "feedback.jsonl"
+    mgr = FeedbackManager(fb_path)
+
+    mgr.add(FarmerFeedback(id="fb-1", crop="Tomato", rating=5, was_useful=True))
+    mgr.add(FarmerFeedback(id="fb-2", crop="Tomato", rating=4, was_useful=True))
+
+    analytics = mgr.get_analytics()
+    assert analytics["total_ratings"] == 2
+    assert analytics["average_rating"] == 4.5
+    assert analytics["usefulness_rate"] == "100.0%"
+
+
+def test_cli_advanced_commands(capsys):
+    # 1. records stats
+    main(["records", "stats"])
+    out = capsys.readouterr().out
+    assert "AGRICULTURAL DATASET ANALYTICS" in out
+
+    # 2. records list
+    main(["records", "list", "--crop", "tomato"])
+    out = capsys.readouterr().out
+    assert "tomato-001" in out
+
+    # 3. records search
+    main(["records", "search", "--query", "irrigation"])
+    out = capsys.readouterr().out
+    assert "Search for 'irrigation'" in out
+
+    # 4. records show
+    main(["records", "show", "--id", "tomato-002"])
+    out = capsys.readouterr().out
+    assert "RECORD DETAILS: [tomato-002]" in out
+
+    # 5. audit
+    main(["audit"])
+    out = capsys.readouterr().out
+    assert "DATASET INTEGRITY AUDIT" in out
+
+    # 6. weather
+    main(["weather", "--crop", "wheat", "--temp", "34", "--humidity", "40"])
+    out = capsys.readouterr().out
+    assert "METEOROLOGICAL RISK ADVISORY" in out
+
+    # 7. soil
+    main(["soil", "--crop", "rice", "--ph", "7.8"])
+    out = capsys.readouterr().out
+    assert "SOIL INTELLIGENCE EVALUATION" in out
+
+    # 8. disease
+    main(["disease", "--crop", "tomato", "--symptoms", "blight"])
+    out = capsys.readouterr().out
+    assert "INTEGRATED PEST & DISEASE KNOWLEDGE BASE" in out
+
+    # 9. feedback stats
+    main(["feedback", "--stats"])
+    out = capsys.readouterr().out
+    assert "FARMER FEEDBACK ANALYTICS" in out
