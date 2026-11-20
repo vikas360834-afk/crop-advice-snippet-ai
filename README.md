@@ -59,12 +59,12 @@ Spraying Window: UNFAVOURABLE: Postpone spraying. Rainfall imminent; applied che
 
 ## How advice is produced
 
-The GPT model writes advice from the crop and problem. If its text is too short, too repetitive, or lacks agricultural terms, the tool uses the stored record for that crop. If there is no record, it uses a generic sentence.
+The GPT model writes advice from the crop and problem. If its text is too short, too repetitive, or lacks agricultural terms, the tool uses a relevant stored record or matching built-in corpus entry. It does not select an arbitrary record simply because it belongs to the same crop. If no suitable entry exists, it uses a generic sentence.
 
 ## Evaluation
 
-- **Automated tests:** 20 tests cover the CLI, the crop registry, the records store, and the tokenizer and embedding code. They run on every push in GitHub Actions.
-- **Where answers come from:** `python -m tools.measure_advice` ran 10 fixed crop and problem queries. 6 answers (60%) came from the model's own text, 2 (20%) from a stored record, and 2 (20%) from the generic sentence. Details are in `results/measure_advice.csv`.
+- **Automated tests:** Pytest covers corpus formatting, tokenizer round-trips, causal masking, transformer shapes, training, CLI commands, crop-registry lookup, disease/pest search, records, weather/soil rules, and feedback analytics. GitHub Actions runs `pytest -q` on pushes and pull requests.
+- **Where answers come from:** `python -m tools.measure_advice` labels 10 fixed queries by answer source (model, stored record, generic fallback, or empty). This is a routing metric, not a factual-accuracy score. Run it locally to regenerate `results/measure_advice.csv`.
 - **Quality (source-checked):** all 8 model and record answers were checked against published guidance by an AI assistant, not an expert. The two tomato records were rewritten to match their sources, so their pass reflects the rewritten text, not the model.
 
 | Crop | Problem | Source | Verdict | What the source says |
