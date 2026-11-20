@@ -15,7 +15,3 @@ data/raw/*
 **/__pycache__/
 *.pyc
 
-# Nested local copies
-/crop-advice-snippet-ai/
-/learnfast-workbench/
-
