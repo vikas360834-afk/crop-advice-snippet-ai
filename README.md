@@ -10,7 +10,7 @@ pip install -r requirements.txt
 python tools/generate_crop_registry.py   # builds data/crops/crop_registry.json
 python -m tools.seed_sample_records      # writes two sample tomato records
 pytest -q
-python -m app.cli hello
+python -m app.cli --help
 ```
 
 On Windows PowerShell, activate with `.\.venv\Scripts\Activate.ps1`.
@@ -99,7 +99,7 @@ This project started from a course starter template, which provided the mileston
 
 ## Local data files
 
-The feedback command keeps its structured submissions in `data/farmer_feedback.jsonl`. Its small auxiliary key-value store defaults to `data/app.json` and can be redirected with the `DATA_PATH` environment variable. Runtime data is ignored by git; only the documented training corpus and source dataset are tracked.
+The feedback command keeps structured submissions in `data/farmer_feedback.jsonl`. Runtime data is ignored by git; only the documented training corpus and source dataset are tracked.
 
 ## Next development work
 
