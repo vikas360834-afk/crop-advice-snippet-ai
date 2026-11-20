@@ -13,4 +13,5 @@ jobs:
       - run: python -m tools.seed_sample_records
         env:
           PYTHONPATH: .
+      - run: python -m tools.validate_source_dataset
       - run: pytest -q
