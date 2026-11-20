@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from app.records import DEFAULT_RECORDS_PATH, RecordManager
+from app.records import RecordManager
 
 # Default path constants
 CORPUS_DEFAULT_PATH = Path("data/trusted_training_corpus.txt")
@@ -78,32 +78,17 @@ def build_raw_corpus_text(entries: Optional[List[Dict[str, str]]] = None) -> str
 
 
 def build_training_text_from_records(
-    records_path: Path | str = DEFAULT_RECORDS_PATH,
+    records_path: Path | str = SOURCE_DATASET_PATH,
     exclude_rejected: bool = True,
     prioritize_reviewed: bool = True,
 ) -> str:
-    """Convert structured agricultural records into consistent training text.
-    
-    Filters out rejected records and safely includes weather, soil, growth stage,
-    and source attribution.
+    """Build model text exclusively from the curated, source-attributed JSONL dataset.
+
+    Runtime farmer records remain available to retrieval and feedback workflows, but
+    are not silently promoted into the model's training set.
     """
-    p = Path(records_path)
-    mgr = RecordManager(p) if p.exists() else RecordManager(Path("__missing_records__.jsonl"))
-    records = list(mgr.records.values())
-
-    if exclude_rejected:
-        records = [r for r in records if r.review_status != "rejected"]
-
-    if prioritize_reviewed:
-        # Sort so verified/reviewed come first
-        priority_map = {"verified": 0, "reviewed": 1, "pending": 2}
-        records.sort(key=lambda r: priority_map.get(r.review_status, 3))
-
-    lines = [r.to_training_text() for r in records]
-    # Base examples are source-attributed JSONL; unverified legacy text is excluded.
-    base_text = build_raw_corpus_text()
-    return ("\n".join(lines) + "\n" if lines else "") + base_text
-
+    del records_path, exclude_rejected, prioritize_reviewed
+    return build_raw_corpus_text()
 
 def load_or_create_corpus(path: Path | str = CORPUS_DEFAULT_PATH) -> str:
     """Load the agricultural corpus from file, creating it if not present."""
