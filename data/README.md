@@ -58,7 +58,7 @@ The records are concise summaries, not a copy of the full source publications. B
 
 ## Separate model-training text
 
-The root-level `data/agricultural_corpus.txt` is a separate expanded training-text file. Its plain-text entries do not carry a record-level `source_name` and `source_url` alongside each advice item. The 20-row JSONL attribution above must not be assumed to establish provenance for every line in that separate text file. Treat those entries as unverified training material until a line-by-line source map and review are added.
+The root-level `data/agricultural_corpus.txt` is a separate expanded training-text file with 59 entries. Its plain-text entries do not carry a record-level `source_name` and `source_url` alongside each advice item. The 20-row JSONL attribution above must not be assumed to establish provenance for every line in that separate text file. Treat those entries as unverified training material until a line-by-line source map and review are added. The required curation process and metadata schema are documented in [expanded_corpus_provenance.md](expanded_corpus_provenance.md).
 
 ## Re-run the metadata audit
 
