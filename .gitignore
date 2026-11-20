@@ -6,7 +6,9 @@ data/*
 !data/README.md
 !data/raw/
 data/raw/*
-!data/raw/agriculture.jsonl# Local secrets
+!data/raw/agriculture.jsonl
+
+# Local secrets
 .env
 
 # Python generated files
@@ -16,3 +18,4 @@ data/raw/*
 # Nested local copies
 /crop-advice-snippet-ai/
 /learnfast-workbench/
+
