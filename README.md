@@ -65,22 +65,22 @@ The GPT model writes advice from the crop and problem. If its text is too short,
 
 - **Automated tests:** 20 tests cover the CLI, the crop registry, the records store, and the tokenizer and embedding code. They run on every push in GitHub Actions.
 - **Where answers come from:** `python -m tools.measure_advice` ran 10 fixed crop and problem queries. 6 answers (60%) came from the model's own text, 2 (20%) from a stored record, and 2 (20%) from the generic sentence. Details are in `results/measure_advice.csv`.
-- **Quality (partly source-checked):** each of the 10 answers was rated for relevance and agronomic soundness, and three were checked against published guidance. The ratings are from an AI assistant, not an expert.
+- **Quality (source-checked):** all 8 model and record answers were checked against published guidance. The checks were done by an AI assistant, not an expert.
 
-| Crop | Problem | Source | Relevant | Verdict | Source check |
-|---|---|---|---|---|---|
-| Tomato | early blight | record | yes | pass | not checked |
-| Tomato | irrigation | record | yes | pass | not checked |
-| Rice | yellow stem borer | model | yes | partial | Products and 10 kg/ha granule rate confirmed. Moth-flight timing not supported; the guidance ties granules to infestation thresholds. Pheromone trap density not found. |
-| Rice | blast disease | model | yes | partial | Azoxystrobin confirmed. Advice to drain standing water contradicts the source, which warns against field drainage and excess nitrogen. Tricyclazole not found on the page. |
-| Wheat | rust disease | model | yes | pass | not checked |
-| Maize | fall armyworm | model | yes | unverified | Source page opened but had no article text. |
-| Potato | late blight | model | yes | partial | Source confirms metalaxyl is used only in mixtures, cymoxanil needs a partner, and metalaxyl resistance is documented. |
-| Mango | anthracnose | generic | no | fail | not applicable |
-| Chilli | leaf curl | generic | no | fail | not applicable |
-| Cotton | bollworm | model | yes | pass | not checked |
+| Crop | Problem | Source | Verdict | What the source says |
+|---|---|---|---|---|
+| Tomato | early blight | record | unverified | The checked guidance names other fungicides, not copper, and does not mention removing infected leaves. |
+| Tomato | irrigation | record | partial | Regular irrigation and drip are supported. The source ties cracking to drought followed by sudden watering, not to waterlogging. |
+| Rice | yellow stem borer | model | partial | Products and the 10 kg/ha granule rate are confirmed. Moth-flight timing is not supported, and the pheromone trap count was not found. |
+| Rice | blast disease | model | partial | Azoxystrobin is confirmed. The advice to drain standing water contradicts the source, which warns against drainage and excess nitrogen. Tricyclazole was not found. |
+| Wheat | rust disease | model | pass | Propiconazole and tebuconazole are listed for use before flag leaf emergence. |
+| Maize | fall armyworm | model | unverified | The source page had no article text. |
+| Potato | late blight | model | partial | Metalaxyl is listed only in mixtures, cymoxanil needs a partner, and metalaxyl resistance is documented. |
+| Mango | anthracnose | generic | fail | The answer is about a different problem. |
+| Chilli | leaf curl | generic | fail | The answer is about a different problem. |
+| Cotton | bollworm | model | partial | Rotating insecticides and indoxacarb as a monitored product are confirmed. Spinosad, Bt, and egg counts are not. |
 
-Overall: 4 pass, 3 partial, 1 unverified, 2 fail. Only 3 of the 10 answers were checked against a source, so the quality evidence is still limited.
+Overall: 1 pass, 5 partial, 2 unverified, 2 fail. Of the 8 model and record answers, 1 is confirmed, 5 are partly confirmed, and 2 are not confirmed.
 
 Notes on the partial answers: the rice advice applies granules during moth flight rather than at the dead-heart stage, and the potato advice offers metalaxyl or cymoxanil alone, while resistance management calls for mixtures. No answer gives dosages.
 
@@ -110,5 +110,6 @@ Model settings live in `.env`, which is ignored by git. Never commit `.env` or p
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
 
 
