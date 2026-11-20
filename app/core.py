@@ -25,7 +25,8 @@ import torch.nn.functional as F
 from app.records import DEFAULT_RECORDS_PATH, RecordManager
 
 # Default path constants
-CORPUS_DEFAULT_PATH = Path("data/agricultural_corpus.txt")
+CORPUS_DEFAULT_PATH = Path("data/trusted_training_corpus.txt")
+SOURCE_DATASET_PATH = Path("data/raw/agriculture.jsonl")
 TOKENIZER_DEFAULT_PATH = Path("data/bpe_tokenizer.json")
 MODEL_DEFAULT_PATH = Path("data/gpt_crop_advice.pt")
 TRAINING_HISTORY_PATH = Path("data/training_history.json")
@@ -35,153 +36,27 @@ TRAINING_HISTORY_PATH = Path("data/training_history.json")
 # MILESTONE 1: Agricultural Advice Corpus Collection & Management
 # =====================================================================
 
-DEFAULT_AGRICULTURAL_CORPUS = [
-    {
-        "crop": "Wheat",
-        "context": "rust disease, moist weather",
-        "advice": "Apply propiconazole or tebuconazole fungicide at early flag leaf stage. Ensure proper row spacing of 15 to 20 cm to enhance air circulation and reduce canopy humidity.",
-    },
-    {
-        "crop": "Wheat",
-        "context": "sandy soil, drought",
-        "advice": "Apply light but frequent sprinkler irrigation during crown root initiation and flowering. Incorporate green manure or farmyard manure before sowing to boost moisture retention.",
-    },
-    {
-        "crop": "Wheat",
-        "context": "nitrogen deficiency, yellow leaves",
-        "advice": "Top-dress with urea at 30 to 40 kg nitrogen per hectare just before irrigation. Split nitrogen applications across basal, tillering, and jointing stages.",
-    },
-    {
-        "crop": "Wheat",
-        "context": "weed infestation, broadleaf weeds",
-        "advice": "Spray metsulfuron-methyl or 2,4-D amine 30 to 35 days after sowing when weeds are at 2 to 4 leaf stage during calm wind conditions.",
-    },
-    {
-        "crop": "Wheat",
-        "context": "lodging prevention, fertile soil",
-        "advice": "Avoid excessive basal nitrogen. Apply plant growth regulators like chlormequat chloride at jointing stage to thicken stems and resist lodging.",
-    },
-    {
-        "crop": "Rice",
-        "context": "blast disease, high humidity",
-        "advice": "Spray tricyclazole or azoxystrobin at initial appearance of spindle lesions. Avoid excess nitrogen and drain standing water temporarily.",
-    },
-    {
-        "crop": "Rice",
-        "context": "clay soil, water management",
-        "advice": "Practice Alternate Wetting and Drying (AWD) by letting water drop 15 cm below soil surface before re-flooding to conserve water and prevent root rot.",
-    },
-    {
-        "crop": "Rice",
-        "context": "stem borer infestation, dead hearts",
-        "advice": "Deploy pheromone traps at 20 traps per hectare. Apply cartap hydrochloride or chlorantraniliprole granules into standing water during peak moth flights.",
-    },
-    {
-        "crop": "Rice",
-        "context": "zinc deficiency, alkaline soil",
-        "advice": "Apply zinc sulfate at 25 kg per hectare basally or foliar spray 0.5% zinc sulfate with 0.25% lime at tillering stage.",
-    },
-    {
-        "crop": "Rice",
-        "context": "bacterial leaf blight, typhoon season",
-        "advice": "Drain excess water, halt nitrogen top-dressing, and spray copper hydroxide with validamycin. Avoid clipping seedling leaf tips during transplanting.",
-    },
-    {
-        "crop": "Tomato",
-        "context": "early blight, humid warm weather",
-        "advice": "Apply mancozeb or chlorothalonil every 7 to 10 days. Prune lower foliage up to 30 cm from soil and apply mulch to prevent soilborne fungal splash.",
-    },
-    {
-        "crop": "Tomato",
-        "context": "blossom end rot, sandy soil",
-        "advice": "Blossom end rot is caused by calcium deficiency and irregular watering. Maintain uniform moisture with drip irrigation and apply foliar calcium chloride.",
-    },
-    {
-        "crop": "Tomato",
-        "context": "whitefly infestation, viral curl",
-        "advice": "Install yellow sticky traps above canopy level. Spray 5% neem seed kernel extract or acetamiprid to suppress whitefly vectors of tomato leaf curl virus.",
-    },
-    {
-        "crop": "Tomato",
-        "context": "heavy clay soil, root rot",
-        "advice": "Cultivate on 20 cm raised beds enriched with compost and coarse sand. Inoculate root zones with Trichoderma viride bio-fungicide.",
-    },
-    {
-        "crop": "Tomato",
-        "context": "flower drop, high summer temperature",
-        "advice": "Install 35% shade netting during peak noon hours. Spray naphthalene acetic acid (NAA) at 15 to 20 ppm during flowering to promote fruit set.",
-    },
-    {
-        "crop": "Potato",
-        "context": "late blight, cool wet conditions",
-        "advice": "Apply metalaxyl or cymoxanil upon early warning alerts. Ridge soil high over potato rows to prevent zoospore wash-down to tubers.",
-    },
-    {
-        "crop": "Potato",
-        "context": "scab disease, dry alkaline soil",
-        "advice": "Maintain soil pH around 5.2 to 5.5. Maintain continuous soil moisture during tuber initiation to suppress Streptomyces scabies bacteria.",
-    },
-    {
-        "crop": "Potato",
-        "context": "aphid transmission, seed production",
-        "advice": "Apply imidacloprid early. Dehaulm potato vines 10 to 14 days prior to harvest when aphid populations surpass economic thresholds.",
-    },
-    {
-        "crop": "Potato",
-        "context": "potassium demand, tuber bulking",
-        "advice": "Apply sulfate of potash rather than muriate of potash to enhance starch content, tuber sizing, and post-harvest storage longevity.",
-    },
-    {
-        "crop": "Maize",
-        "context": "fall armyworm, whorl damage",
-        "advice": "Scout central whorls for leaf windowing. Apply emamectin benzoate or spinetoram directly into whorls during early morning or dusk.",
-    },
-    {
-        "crop": "Maize",
-        "context": "drought stress, flowering tasseling",
-        "advice": "Tasseling and silking are critical water demand windows. Prioritize irrigation to avoid pollination failure and poor ear filling.",
-    },
-    {
-        "crop": "Maize",
-        "context": "acidic soil, phosphorus fixation",
-        "advice": "Apply agricultural limestone 3 to 4 weeks before planting. Band diammonium phosphate (DAP) 5 cm beside and below seed rows.",
-    },
-    {
-        "crop": "Cotton",
-        "context": "bollworm infestation, square shedding",
-        "advice": "Set pheromone traps and monitor egg counts on tender terminals. Rotate spinosad, indoxacarb, and Bt sprays to delay pest resistance.",
-    },
-    {
-        "crop": "Cotton",
-        "context": "sucking pests, aphid and jassid attack",
-        "advice": "Apply flonicamid or dinotefuran at economic threshold. Intercrop with cowpea or maize border rows to attract beneficial ladybird beetles.",
-    },
-    {
-        "crop": "Soybean",
-        "context": "rust, humid cloudy weather",
-        "advice": "Apply strobilurin plus triazole premix at R1 to R3 reproductive stages. Inspect lower canopies early for tiny tan pustules.",
-    },
-    {
-        "crop": "Apple",
-        "context": "apple scab, spring rainfall",
-        "advice": "Apply protective captan or dodine prior to rain events between green tip and petal fall. Flail mow fallen leaves in autumn.",
-    },
-    {
-        "crop": "Coffee",
-        "context": "coffee leaf rust, wet conditions",
-        "advice": "Spray preventive 0.5% Bordeaux mixture before monsoon onset, followed by copper oxychloride or epoxiconazole at first sign of orange spots.",
-    },
-    {
-        "crop": "Sugarcane",
-        "context": "red rot disease, seed sett transmission",
-        "advice": "Use certified disease-free setts from hot-water treated nurseries (52 deg C for 30 minutes). Rogue out infected clumps promptly.",
-    },
-    {
-        "crop": "Banana",
-        "context": "sigatoka leaf spot, high humidity",
-        "advice": "De-leaf spotted leaves promptly to reduce airborne inoculum and spray propiconazole 25 EC mixed with mineral oil.",
-    },
-]
+def load_source_advice_entries(path: Path | str = SOURCE_DATASET_PATH) -> List[Dict[str, str]]:
+    """Load advice examples only from record-level attributed JSONL source data."""
+    dataset_path = Path(path)
+    if not dataset_path.is_file():
+        raise FileNotFoundError(f"Attributed source dataset not found: {dataset_path}")
+    entries: List[Dict[str, str]] = []
+    for line_number, raw_line in enumerate(dataset_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
+        if not raw_line.strip():
+            continue
+        try:
+            row = json.loads(raw_line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON in {dataset_path} line {line_number}: {exc.msg}") from exc
+        required = ("crop", "topic", "text", "source_name", "source_url")
+        if not isinstance(row, dict) or not all(str(row.get(key, "")).strip() for key in required):
+            raise ValueError(f"Missing required source fields in {dataset_path} line {line_number}")
+        entries.append({"crop": str(row["crop"]).title(), "context": str(row["topic"]).replace("_", " "), "advice": str(row["text"]).strip(), "source_name": str(row["source_name"]).strip(), "source_url": str(row["source_url"]).strip()})
+    return entries
+
+# Trusted model examples are loaded from attributed JSONL, not legacy plain text.
+DEFAULT_AGRICULTURAL_CORPUS = load_source_advice_entries()
 
 
 def format_advice_entry(entry: Dict[str, str]) -> str:
@@ -194,9 +69,12 @@ def format_advice_entry(entry: Dict[str, str]) -> str:
 
 def build_raw_corpus_text(entries: Optional[List[Dict[str, str]]] = None) -> str:
     """Build a raw text corpus from advice records."""
-    entries = entries or DEFAULT_AGRICULTURAL_CORPUS
-    lines = [format_advice_entry(e) for e in entries]
-    return "\n".join(lines) + "\n"
+    selected = DEFAULT_AGRICULTURAL_CORPUS if entries is None else entries
+    lines = [
+        format_advice_entry(entry) + " SOURCE: " + entry.get("source_name", "unknown") + " (" + entry.get("source_url", "unknown") + ")"
+        for entry in selected
+    ]
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def build_training_text_from_records(
@@ -210,10 +88,7 @@ def build_training_text_from_records(
     and source attribution.
     """
     p = Path(records_path)
-    if not p.exists():
-        return load_or_create_corpus()
-
-    mgr = RecordManager(p)
+    mgr = RecordManager(p) if p.exists() else RecordManager(Path("__missing_records__.jsonl"))
     records = list(mgr.records.values())
 
     if exclude_rejected:
@@ -225,19 +100,15 @@ def build_training_text_from_records(
         records.sort(key=lambda r: priority_map.get(r.review_status, 3))
 
     lines = [r.to_training_text() for r in records]
-    # Also append the base corpus lines for maximum coverage
-    base_text = load_or_create_corpus()
-    combined = "\n".join(lines) + "\n" + base_text
-    return combined
+    # Base examples are source-attributed JSONL; unverified legacy text is excluded.
+    base_text = build_raw_corpus_text()
+    return ("\n".join(lines) + "\n" if lines else "") + base_text
 
 
 def load_or_create_corpus(path: Path | str = CORPUS_DEFAULT_PATH) -> str:
     """Load the agricultural corpus from file, creating it if not present."""
     p = Path(path)
-    if p.exists():
-        content = p.read_text(encoding="utf-8")
-        if content.strip():
-            return content
+    # Regenerate only from attributed JSONL; never reuse unverified legacy text.
     p.parent.mkdir(parents=True, exist_ok=True)
     text = build_raw_corpus_text()
     p.write_text(text, encoding="utf-8")
@@ -265,7 +136,7 @@ def get_corpus_statistics(text: str) -> Dict[str, Any]:
 
 def milestone_1() -> Dict[str, Any]:
     """Milestone 1: Collect a small corpus of agricultural advice, crop guides, or farming articles."""
-    text = load_or_create_corpus(CORPUS_DEFAULT_PATH)
+    text = build_raw_corpus_text()
     stats = get_corpus_statistics(text)
     return {
         "status": "completed",
@@ -469,7 +340,7 @@ def get_trained_tokenizer(corpus_text: Optional[str] = None, vocab_size: int = 4
 
 def milestone_2() -> Dict[str, Any]:
     """Run the trained byte-pair tokenizer and embedding layer on a sample advice prompt."""
-    corpus = load_or_create_corpus()
+    corpus = build_training_text_from_records()
     tokenizer = get_trained_tokenizer(corpus, vocab_size=380)
 
     sample_text = "[CROP: Tomato | CONTEXT: blight] ADVICE: Use copper fungicide."
