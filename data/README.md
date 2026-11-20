@@ -14,7 +14,7 @@ The 20 rows have unique IDs, non-empty source names and HTTPS source URLs. Sourc
 
 The dataset does not currently contain publication dates or retrieval dates. These dates remain unknown and are not guessed. The presence of a source URL records attribution; it does not prove that every summarized sentence is complete, current or suitable for every region.
 
-Sources represented include Tamil Nadu Agricultural University (TNAU) Agritech pages and the ICAR Kharif Agro-Advisories for Farmers 2025 PDF. See the record-level URLs in `raw/agriculture.jsonl` for the exact source of each item.
+Sources represented include Tamil Nadu Agricultural University (TNAU) Agritech pages and the ICAR Kharif Agro-Advisories for Farmers 2025 PDF. See [`SOURCES.md`](SOURCES.md) for a readable register mapping every record ID to its exact source URL; the canonical record-level metadata remains in `raw/agriculture.jsonl`.
 
 These are concise educational summaries. Check the linked publication, current product labels and regional agricultural guidance before acting on a recommendation. The project is not an agronomy authority.
 
