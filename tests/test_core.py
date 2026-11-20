@@ -45,7 +45,7 @@ def test_milestone_1():
     assert "[CROP: Maize | CONTEXT: drought] ADVICE: Water at tasseling." == formatted
 
 
-# Milestone 2: Implement the byte-pair tokenizer and generate embeddings from the agricultural text.
+# Milestone 2 coverage: BPE training, lossless encode/decode, and embedding shapes.
 def test_milestone_2():
     result = milestone_2()
     assert result["status"] == "completed"
@@ -116,7 +116,7 @@ def test_milestone_4():
     assert torch.all(x[:, 1:] == y[:, :-1])
 
 
-# Milestone 5: Implement a text generation function to provide concise advice snippets.
+# Milestone 5 coverage: generated advice is non-empty and respects the concise-output limit.
 def test_milestone_5():
     result = milestone_5()
     assert result["status"] == "completed"
