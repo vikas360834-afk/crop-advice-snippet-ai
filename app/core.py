@@ -468,7 +468,7 @@ def get_trained_tokenizer(corpus_text: Optional[str] = None, vocab_size: int = 4
 
 
 def milestone_2() -> Dict[str, Any]:
-    """Milestone 2: Implement the byte-pair tokenizer and generate embeddings from the agricultural text."""
+    """Run the trained byte-pair tokenizer and embedding layer on a sample advice prompt."""
     corpus = load_or_create_corpus()
     tokenizer = get_trained_tokenizer(corpus, vocab_size=380)
 
@@ -1085,7 +1085,7 @@ def generate_advice_snippet(
 
 
 def milestone_5() -> Dict[str, Any]:
-    """Milestone 5: Implement a text generation function to provide concise advice snippets."""
+    """Exercise text generation and return a concise agricultural advice example."""
     model, tokenizer = load_or_train_model(epochs=120)
     crop = "Tomato"
     snippet = generate_advice_snippet(model, tokenizer, crop=crop, context="blight")
