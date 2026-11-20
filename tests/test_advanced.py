@@ -1,6 +1,7 @@
 """Unit tests for Advanced Agricultural Records and Intelligence modules."""
 
 import pytest
+import torch
 
 from app.cli import main
 from app.crop_intel import check_soil_suitability, get_crop_profile, list_supported_crops
