@@ -2,7 +2,6 @@
 data/*
 
 # Keep the documented source dataset
-!data/agricultural_corpus.txt
 !data/README.md
 !data/raw/
 data/raw/*
