@@ -65,22 +65,22 @@ The GPT model writes advice from the crop and problem. If its text is too short,
 
 - **Automated tests:** 20 tests cover the CLI, the crop registry, the records store, and the tokenizer and embedding code. They run on every push in GitHub Actions.
 - **Where answers come from:** `python -m tools.measure_advice` ran 10 fixed crop and problem queries. 6 answers (60%) came from the model's own text, 2 (20%) from a stored record, and 2 (20%) from the generic sentence. Details are in `results/measure_advice.csv`.
-- **Quality (AI-rated):** each of the 10 answers was rated for relevance and agronomic soundness. This rating was done by an AI assistant from general agronomy knowledge, not by an expert, and has not been checked by a specialist.
+- **Quality (partly source-checked):** each of the 10 answers was rated for relevance and agronomic soundness, and three were checked against published guidance. The ratings are from an AI assistant, not an expert.
 
-| Crop | Problem | Source | Relevant | Sound | Verdict |
+| Crop | Problem | Source | Relevant | Verdict | Source check |
 |---|---|---|---|---|---|
-| Tomato | early blight | record | yes | yes | pass |
-| Tomato | irrigation | record | yes | yes | pass |
-| Rice | yellow stem borer | model | yes | partly | partial |
-| Rice | blast disease | model | yes | yes | pass |
-| Wheat | rust disease | model | yes | yes | pass |
-| Maize | fall armyworm | model | yes | yes | pass |
-| Potato | late blight | model | yes | partly | partial |
-| Mango | anthracnose | generic | no | no | fail |
-| Chilli | leaf curl | generic | no | no | fail |
-| Cotton | bollworm | model | yes | yes | pass |
+| Tomato | early blight | record | yes | pass | not checked |
+| Tomato | irrigation | record | yes | pass | not checked |
+| Rice | yellow stem borer | model | yes | partial | Products and 10 kg/ha granule rate confirmed. Moth-flight timing not supported; the guidance ties granules to infestation thresholds. Pheromone trap density not found. |
+| Rice | blast disease | model | yes | partial | Azoxystrobin confirmed. Advice to drain standing water contradicts the source, which warns against field drainage and excess nitrogen. Tricyclazole not found on the page. |
+| Wheat | rust disease | model | yes | pass | not checked |
+| Maize | fall armyworm | model | yes | unverified | Source page opened but had no article text. |
+| Potato | late blight | model | yes | partial | Source confirms metalaxyl is used only in mixtures, cymoxanil needs a partner, and metalaxyl resistance is documented. |
+| Mango | anthracnose | generic | no | fail | not applicable |
+| Chilli | leaf curl | generic | no | fail | not applicable |
+| Cotton | bollworm | model | yes | pass | not checked |
 
-Overall: 6 pass, 2 partial, 2 fail. Model answers: 4 pass, 2 partial. Record answers: 2 pass. Generic answers: 2 fail.
+Overall: 4 pass, 3 partial, 1 unverified, 2 fail. Only 3 of the 10 answers were checked against a source, so the quality evidence is still limited.
 
 Notes on the partial answers: the rice advice applies granules during moth flight rather than at the dead-heart stage, and the potato advice offers metalaxyl or cymoxanil alone, while resistance management calls for mixtures. No answer gives dosages.
 
@@ -110,4 +110,5 @@ Model settings live in `.env`, which is ignored by git. Never commit `.env` or p
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
 
