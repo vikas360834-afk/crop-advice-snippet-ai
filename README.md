@@ -101,11 +101,11 @@ This project started from a course starter template, which provided the mileston
 
 The feedback command keeps its structured submissions in `data/farmer_feedback.jsonl`. Its small auxiliary key-value store defaults to `data/app.json` and can be redirected with the `DATA_PATH` environment variable. Runtime data is ignored by git; only the documented training corpus and source dataset are tracked.
 
-## Stretch ideas
+## Next development work
 
-- Curate a larger and more diverse agricultural dataset.
-- Let users add soil type, weather, and growth stage to tailor advice. The CLI already accepts these options; the next step is to measure whether they change the output.
-- Add a feedback command so users can rate advice.
+- Add a source map and review dates for every entry in the expanded plain-text training corpus before treating it as fully traceable.
+- Expand the structured source dataset beyond its current four crops using current, region-specific publications.
+- Evaluate whether soil type, weather, and growth-stage inputs measurably improve advice quality.
 
 ## License
 
