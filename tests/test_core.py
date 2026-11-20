@@ -37,7 +37,6 @@ def test_milestone_1():
     assert set(stats["unique_crops"]) == {"Rice", "Maize", "Wheat", "Tomato"}
     assert stats["num_records"] == 20
     assert stats["num_words"] > 100
-    assert stats["num_words"] > 100
 
     # Test format_advice_entry
     formatted = format_advice_entry({"crop": "Maize", "context": "drought", "advice": "Water at tasseling."})
