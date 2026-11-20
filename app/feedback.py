@@ -14,6 +14,7 @@ Enables farmers to rate generated advice snippets:
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -67,15 +68,18 @@ class FeedbackManager:
         self.feedback_list = []
         if not self.path.exists():
             return
-        for line in self.path.read_text(encoding="utf-8").splitlines():
+        for line_number, line in enumerate(self.path.read_text(encoding="utf-8").splitlines(), start=1):
             line = line.strip()
             if not line:
                 continue
             try:
                 data = json.loads(line)
                 self.feedback_list.append(FarmerFeedback(**data))
-            except Exception:
-                pass
+            except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+                logging.warning(
+                    "Skipping invalid feedback record in %s at line %d: %s",
+                    self.path, line_number, exc,
+                )
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
