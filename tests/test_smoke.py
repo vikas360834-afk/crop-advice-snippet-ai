@@ -1,18 +1,33 @@
-"""Integration tests for the JSON-backed store and command-line startup."""
+"""Project-specific CLI integration tests."""
 
-from app.storage import Store
+import json
 
+import pytest
 
-def test_json_store_round_trips_values_and_defaults(tmp_path):
-    store = Store(str(tmp_path / "app.json"))
-    store.put("hello", {"n": 1})
-    assert store.get("hello") == {"n": 1}
-    assert store.get("missing", "fallback") == "fallback"
-    assert store.all() == {"hello": {"n": 1}}
+from app.cli import main
 
 
-def test_cli_hello_command_runs(capsys):
-    from app.cli import main
+def test_cli_help_lists_crop_and_agricultural_commands(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    output = capsys.readouterr().out
+    assert "advice" in output
+    assert "crops" in output
+    assert "records" in output
+    assert "weather" in output
+    assert "feedback" in output
 
-    main(["hello"])
-    assert "is ready" in capsys.readouterr().out
+
+def test_feedback_command_persists_structured_jsonl(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    main(["feedback", "--crop", "Wheat", "--rating", "5", "--comment", "Useful field guidance"])
+
+    assert "Recorded 5-star feedback" in capsys.readouterr().out
+    feedback_path = tmp_path / "data" / "farmer_feedback.jsonl"
+    rows = [json.loads(line) for line in feedback_path.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["crop"] == "Wheat"
+    assert rows[0]["rating"] == 5
+    assert rows[0]["comment"] == "Useful field guidance"
