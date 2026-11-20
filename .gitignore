@@ -1,12 +1,18 @@
-# Secrets: never commit your real settings
+# Ignore generated data by default
+data/*
+
+# Keep the documented source dataset
+!data/agricultural_corpus.txt
+!data/README.md
+!data/raw/
+data/raw/*
+!data/raw/agriculture.jsonl# Local secrets
 .env
 
-# Python
-__pycache__/
+# Python generated files
+**/__pycache__/
 *.pyc
-.venv/
-.pytest_cache/
 
-# Local data
-data/
-*.db
+# Nested local copies
+/crop-advice-snippet-ai/
+/learnfast-workbench/
