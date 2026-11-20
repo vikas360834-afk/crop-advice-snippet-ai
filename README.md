@@ -53,3 +53,28 @@ Model settings live in `.env`, which is ignored by git. Never commit `.env` or p
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Example results
+
+Pest and IPM lookup (`python -m app.cli pest search --crop rice`), first entry:
+
+```
+[PEST-RIC-01] Yellow Stem Borer (Scirpophaga incertulas)
+  Crop      : Rice | Parts: Central tillers, growing points, panicle stems
+  Symptoms  : Dead hearts (central vegetative tillers dry up) and White heads (empty white panicles at heading)
+  Severity  : Critical | Weather: Warm humid weather (25-30C), relative humidity >80%, dense planting
+  Source    : ICAR-NRRI Cuttack
+```
+
+Weather advisory (`python -m app.cli weather --crop Tomato --temp 32 --humidity 85 --rainfall 40`):
+
+```
+METEOROLOGICAL RISK ADVISORY FOR TOMATO
+Conditions : Temp 32.0 C | Humidity 85.0% | Rain 40.0 mm | Wind 8.0 km/h
+Identified Risks:
+  - MODERATE: Fungal sporulation warning
+  - HIGH: Soil Waterlogging & Root Asphyxiation Risk
+Spraying Window: UNFAVOURABLE: Postpone spraying. Rainfall imminent; applied chemical wash-off will occur.
+```
+
+The weather advisory uses only the values you type in and fixed rules. It does not fetch live weather.
