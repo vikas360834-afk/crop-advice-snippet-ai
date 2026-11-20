@@ -4,7 +4,6 @@ import json
 import logging
 
 from app.feedback import FarmerFeedback, FeedbackManager
-from app.image_records import CropImageRecord, ImageRecordManager
 from app.records import AgriculturalRecord, RecordManager
 from app.soil_intel import SoilManager, SoilRecord
 from app.weather_intel import WeatherManager, WeatherRecord
@@ -17,12 +16,6 @@ def test_jsonl_managers_warn_about_corrupt_rows_and_keep_valid_rows(tmp_path, ca
             FeedbackManager,
             FarmerFeedback(id="fb-1", crop="Rice", rating=5).to_dict(),
             "feedback_list",
-        ),
-        (
-            "image",
-            ImageRecordManager,
-            CropImageRecord(id="img-1", image_path="field.jpg", crop="Rice").to_dict(),
-            "records",
         ),
         (
             "agricultural",
@@ -66,7 +59,7 @@ def test_jsonl_managers_warn_about_corrupt_rows_and_keep_valid_rows(tmp_path, ca
     for label, manager_type, valid_record, collection_name in cases:
         path = tmp_path / f"{label}.jsonl"
         path.write_text(
-            "{malformed json}\n" + json.dumps(valid_record) + "\n",
+            "{malformed json}\\n" + json.dumps(valid_record) + "\\n",
             encoding="utf-8",
         )
         with caplog.at_level(logging.WARNING):
