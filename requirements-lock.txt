@@ -4,6 +4,7 @@
 # platform-specific CUDA packages onto Windows/macOS users.
 
 pytest==8.3.3
+numpy==2.3.4
 torch==2.15.0
 iniconfig==2.3.1
 packaging==26.3
