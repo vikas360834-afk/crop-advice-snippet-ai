@@ -686,7 +686,9 @@ class AgriculturalDataset:
         required = self.block_size + 1
         if len(data) < required:
             data = data.repeat((required + len(data) - 1) // len(data))
-        max_start = len(data) - self.block_size
+        # A shifted target needs one extra token after the input window.
+        # Therefore the last valid start is len(data) - block_size - 1.
+        max_start = len(data) - self.block_size - 1
         starts = torch.randint(0, max_start + 1, (batch_size,))
         x = torch.stack([data[i : i + self.block_size] for i in starts])
         y = torch.stack([data[i + 1 : i + self.block_size + 1] for i in starts])
