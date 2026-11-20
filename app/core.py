@@ -675,16 +675,21 @@ class AgriculturalDataset:
         self.block_size = block_size
 
     def get_batch(self, batch_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        max_idx = len(self.data) - self.block_size - 1
-        if max_idx <= 0:
-            repeats = (self.block_size * 2 + 1) // max(1, len(self.data)) + 1
-            data = self.data.repeat(repeats)
-            max_idx = len(data) - self.block_size - 1
-        else:
-            data = self.data
-        ix = torch.randint(0, max_idx, (batch_size,))
-        x = torch.stack([data[i : i + self.block_size] for i in ix])
-        y = torch.stack([data[i + 1 : i + self.block_size + 1] for i in ix])
+        if batch_size < 1:
+            raise ValueError("batch_size must be at least 1")
+        if self.block_size < 1:
+            raise ValueError("block_size must be at least 1")
+        if self.data.numel() < 2:
+            raise ValueError("At least two tokens are required to build next-token examples")
+
+        data = self.data
+        required = self.block_size + 1
+        if len(data) < required:
+            data = data.repeat((required + len(data) - 1) // len(data))
+        max_start = len(data) - self.block_size
+        starts = torch.randint(0, max_start + 1, (batch_size,))
+        x = torch.stack([data[i : i + self.block_size] for i in starts])
+        y = torch.stack([data[i + 1 : i + self.block_size + 1] for i in starts])
         return x, y
 
 
@@ -703,14 +708,24 @@ def train_gpt_model(
     torch.manual_seed(seed)
     start_time = time.time()
 
-    # Train / validation split if val_tokens not provided
-    if val_tokens is None and len(train_tokens) > 200:
+    if epochs < 1:
+        raise ValueError("epochs must be at least 1")
+    if batch_size < 1:
+        raise ValueError("batch_size must be at least 1")
+    if lr <= 0:
+        raise ValueError("lr must be greater than 0")
+    if len(train_tokens) < 2:
+        raise ValueError("train_tokens must contain at least two tokens")
+
+    # Reserve a chronological holdout for small as well as large corpora.
+    if val_tokens is None and len(train_tokens) >= max(40, 2 * (model.block_size + 1)):
         split_idx = int(len(train_tokens) * 0.85)
+        split_idx = min(max(split_idx, model.block_size + 1), len(train_tokens) - (model.block_size + 1))
         val_tokens = train_tokens[split_idx:]
         train_tokens = train_tokens[:split_idx]
 
     train_ds = AgriculturalDataset(train_tokens, block_size=model.block_size)
-    val_ds = AgriculturalDataset(val_tokens, block_size=model.block_size) if val_tokens else None
+    val_ds = AgriculturalDataset(val_tokens, block_size=model.block_size) if val_tokens and len(val_tokens) >= 2 else None
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs), eta_min=1e-5)
@@ -743,12 +758,17 @@ def train_gpt_model(
                 _, v_loss = model(vx, vy)
                 v_loss_val = float(v_loss.item())
                 val_losses.append((step, v_loss_val))
-                if v_loss_val < best_val_loss and save_path:
+                if v_loss_val < best_val_loss:
                     best_val_loss = v_loss_val
+                    best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
             model.train()
 
     elapsed = round(time.time() - start_time, 2)
     final_loss = train_losses[-1] if train_losses else initial_loss
+
+    # Keep the best validation model rather than the last training step.
+    if val_ds and "best_state" in locals():
+        model.load_state_dict(best_state)
 
     # Checkpoint save
     if save_path:
@@ -951,20 +971,21 @@ def generate_advice_snippet(
 
     best_record = None
     if records_match:
-        search_terms = f"{context or ''} {soil or ''} {weather or ''} {growth_stage or ''}".lower()
-        if search_terms.strip():
-            scored = [
-                (
-                    sum(1 for w in search_terms.split() if w in f"{r.topic} {r.symptoms} {r.advice} {r.weather} {r.soil_type}".lower()),
-                    r,
-                )
-                for r in records_match
-            ]
-            scored.sort(key=lambda item: item[0], reverse=True)
-            if scored and scored[0][0] > 0:
-                best_record = scored[0][1]
-        if best_record is None:
-            best_record = records_match[0]
+        search_terms = [
+            word for word in f"{context or ''} {soil or ''} {weather or ''} {growth_stage or ''}".lower().split()
+            if len(word) > 2
+        ]
+        scored = [
+            (
+                sum(1 for word in search_terms if word in f"{r.topic} {r.symptoms} {r.advice} {r.weather} {r.soil_type}".lower()),
+                r,
+            )
+            for r in records_match
+        ]
+        scored.sort(key=lambda item: item[0], reverse=True)
+        # Never return an arbitrary record for an unrelated problem.
+        if not search_terms or (scored and scored[0][0] > 0):
+            best_record = scored[0][1] if scored else None
 
     matching_entries = [e for e in DEFAULT_AGRICULTURAL_CORPUS if e["crop"].lower() == crop_clean.lower()]
 
