@@ -136,7 +136,7 @@ def get_corpus_statistics(text: str) -> Dict[str, Any]:
 
 def milestone_1() -> Dict[str, Any]:
     """Milestone 1: Collect a small corpus of agricultural advice, crop guides, or farming articles."""
-    text = build_raw_corpus_text()
+    text = load_or_create_corpus(CORPUS_DEFAULT_PATH)
     stats = get_corpus_statistics(text)
     return {
         "status": "completed",
