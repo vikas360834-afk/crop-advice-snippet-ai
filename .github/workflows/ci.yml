@@ -9,6 +9,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+      - run: python tools/generate_crop_registry.py
       - run: python -m tools.seed_sample_records
         env:
           PYTHONPATH: .
