@@ -12,6 +12,7 @@ Supports rich JSONL agricultural records with:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -213,9 +214,11 @@ class RecordManager:
                 data = json.loads(line)
                 rec = AgriculturalRecord.from_dict(data)
                 self.records[rec.id] = rec
-            except Exception as e:
-                # Log or ignore corrupted lines safely
-                pass
+            except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+                logging.warning(
+                    "Skipping invalid agricultural record in %s at line %d: %s",
+                    self.storage_path, idx, exc,
+                )
 
     def save(self) -> None:
         """Save all records to JSONL."""
