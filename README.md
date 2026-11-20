@@ -65,12 +65,12 @@ The GPT model writes advice from the crop and problem. If its text is too short,
 
 - **Automated tests:** 20 tests cover the CLI, the crop registry, the records store, and the tokenizer and embedding code. They run on every push in GitHub Actions.
 - **Where answers come from:** `python -m tools.measure_advice` ran 10 fixed crop and problem queries. 6 answers (60%) came from the model's own text, 2 (20%) from a stored record, and 2 (20%) from the generic sentence. Details are in `results/measure_advice.csv`.
-- **Quality (source-checked):** all 8 model and record answers were checked against published guidance. The checks were done by an AI assistant, not an expert.
+- **Quality (source-checked):** all 8 model and record answers were checked against published guidance by an AI assistant, not an expert. The two tomato records were rewritten to match their sources, so their pass reflects the rewritten text, not the model.
 
 | Crop | Problem | Source | Verdict | What the source says |
 |---|---|---|---|---|
-| Tomato | early blight | record | unverified | The checked guidance names other fungicides, not copper, and does not mention removing infected leaves. |
-| Tomato | irrigation | record | partial | Regular irrigation and drip are supported. The source ties cracking to drought followed by sudden watering, not to waterlogging. |
+| Tomato | early blight | record | pass | Record rewritten to match the cited study, which evaluated propineb and tebuconazole-based products. |
+| Tomato | irrigation | record | pass | Record rewritten to match the cited TNAU page: irrigate every 8 to 12 days, drip is suitable, and sudden watering after drought can crack fruit. |
 | Rice | yellow stem borer | model | partial | Products and the 10 kg/ha granule rate are confirmed. Moth-flight timing is not supported, and the pheromone trap count was not found. |
 | Rice | blast disease | model | partial | Azoxystrobin is confirmed. The advice to drain standing water contradicts the source, which warns against drainage and excess nitrogen. Tricyclazole was not found. |
 | Wheat | rust disease | model | pass | Propiconazole and tebuconazole are listed for use before flag leaf emergence. |
@@ -80,7 +80,7 @@ The GPT model writes advice from the crop and problem. If its text is too short,
 | Chilli | leaf curl | generic | fail | The answer is about a different problem. |
 | Cotton | bollworm | model | partial | Rotating insecticides and indoxacarb as a monitored product are confirmed. Spinosad, Bt, and egg counts are not. |
 
-Overall: 1 pass, 5 partial, 2 unverified, 2 fail. Of the 8 model and record answers, 1 is confirmed, 5 are partly confirmed, and 2 are not confirmed.
+Overall: 3 pass, 4 partial, 1 unverified, 2 fail. Of the 8 model and record answers, 3 are confirmed, 4 are partly confirmed, and 1 is unverified.
 
 Notes on the partial answers: the rice advice applies granules during moth flight rather than at the dead-heart stage, and the potato advice offers metalaxyl or cymoxanil alone, while resistance management calls for mixtures. No answer gives dosages.
 
@@ -110,6 +110,7 @@ Model settings live in `.env`, which is ignored by git. Never commit `.env` or p
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
 
 
 
