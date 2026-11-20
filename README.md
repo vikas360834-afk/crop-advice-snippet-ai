@@ -58,7 +58,7 @@ Spraying Window: UNFAVOURABLE: Postpone spraying. Rainfall imminent; applied che
 
 ## How advice is produced
 
-The GPT model writes advice from the crop and problem. If its text is too short, too repetitive, or lacks agricultural terms, the tool uses a relevant stored record or matching built-in corpus entry. It does not select an arbitrary record simply because it belongs to the same crop. If no suitable entry exists, it uses a generic sentence.
+The GPT model is trained only from the 20-row attributed JSONL dataset. Each training example retains its source name and URL. If generated text is too short, repetitive, or lacks agricultural terms, the tool uses a relevant stored record or a source-attributed JSONL entry. It does not train on the deleted, unverified legacy plain-text corpus. If no suitable entry exists, it uses a generic sentence.
 
 ## Evaluation
 
@@ -86,7 +86,7 @@ Notes on the partial answers: the rice advice applies granules during moth fligh
 
 ## Limitations
 
-- The bundled sample has only two tomato records, so the record fallback covers tomato only.
+- The checked-in source dataset currently covers four crops (rice, maize, wheat and tomato), with five records per crop.
 - About 40% of answers in the test set used a fallback, so the model's own text is not always usable.
 - The measurement covers only 10 queries.
 - The crop registry is generated from hand-entered data that has not been independently checked.
@@ -99,12 +99,12 @@ This project started from a course starter template, which provided the mileston
 
 ## Local data files
 
-The feedback command keeps structured submissions in `data/farmer_feedback.jsonl`. Runtime data is ignored by git; only the documented training corpus and source dataset are tracked.
+The feedback command keeps structured submissions in `data/farmer_feedback.jsonl`. Runtime data is ignored by git; only the attributed source dataset and documentation are tracked; the trusted training text is regenerated from JSONL.
 
 ## Next development work
 
-- Add a source map and review dates for every entry in the expanded plain-text training corpus before treating it as fully traceable.
-- Expand the structured source dataset beyond its current four crops using current, region-specific publications.
+- Expand the attributed source dataset beyond its current four crops using current, region-specific publications.
+- Add publication and retrieval dates when verified from the original sources.
 - Evaluate whether soil type, weather, and growth-stage inputs measurably improve advice quality.
 
 ## License
