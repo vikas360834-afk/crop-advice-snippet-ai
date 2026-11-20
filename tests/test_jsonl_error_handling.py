@@ -11,12 +11,7 @@ from app.weather_intel import WeatherManager, WeatherRecord
 
 def test_jsonl_managers_warn_about_corrupt_rows_and_keep_valid_rows(tmp_path, caplog):
     cases = [
-        (
-            "feedback",
-            FeedbackManager,
-            FarmerFeedback(id="fb-1", crop="Rice", rating=5).to_dict(),
-            "feedback_list",
-        ),
+        ("feedback", FeedbackManager, FarmerFeedback(id="fb-1", crop="Rice", rating=5).to_dict(), "feedback_list"),
         (
             "agricultural",
             RecordManager,
@@ -33,13 +28,7 @@ def test_jsonl_managers_warn_about_corrupt_rows_and_keep_valid_rows(tmp_path, ca
         (
             "soil",
             SoilManager,
-            SoilRecord(
-                id="soil-1",
-                field_name="Plot A",
-                location="Farm",
-                soil_type="Loam",
-                soil_ph=6.5,
-            ).to_dict(),
+            SoilRecord(id="soil-1", field_name="Plot A", location="Farm", soil_type="Loam", soil_ph=6.5).to_dict(),
             "records",
         ),
         (
@@ -58,13 +47,11 @@ def test_jsonl_managers_warn_about_corrupt_rows_and_keep_valid_rows(tmp_path, ca
 
     for label, manager_type, valid_record, collection_name in cases:
         path = tmp_path / f"{label}.jsonl"
-        path.write_text(
-            "{malformed json}\\n" + json.dumps(valid_record) + "\\n",
-            encoding="utf-8",
-        )
+        # Use real line breaks so the reader sees one corrupt row and one valid row.
+        path.write_text("{malformed json}\\n" + json.dumps(valid_record) + "\\n", encoding="utf-8")
         with caplog.at_level(logging.WARNING):
             manager = manager_type(path)
 
-        assert len(getattr(manager, collection_name)) == 1
+        assert len(getattr(manager, collection_name)) == 1, label
         assert f"Skipping invalid {label} record" in caplog.text
         caplog.clear()
