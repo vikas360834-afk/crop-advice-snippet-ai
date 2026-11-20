@@ -26,8 +26,6 @@ from app.core import (
     query_crop_advice,
     train_gpt_model,
 )
-from app.storage import Store
-
 
 # Milestone 1: Collect a small corpus of agricultural advice, crop guides, or farming articles.
 def test_milestone_1():
