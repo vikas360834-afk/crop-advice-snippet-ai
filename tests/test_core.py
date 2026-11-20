@@ -33,9 +33,10 @@ def test_milestone_1():
     assert result["status"] == "completed"
     stats = result["stats"]
     assert stats["num_records"] >= 10
-    assert stats["num_crops"] >= 5
-    assert "Tomato" in stats["unique_crops"]
-    assert "Wheat" in stats["unique_crops"]
+    assert stats["num_crops"] == 4
+    assert set(stats["unique_crops"]) == {"Rice", "Maize", "Wheat", "Tomato"}
+    assert stats["num_records"] == 20
+    assert stats["num_words"] > 100
     assert stats["num_words"] > 100
 
     # Test format_advice_entry
@@ -44,6 +45,18 @@ def test_milestone_1():
 
 
 # Milestone 2 coverage: BPE training, lossless encode/decode, and embedding shapes.
+def test_training_corpus_uses_only_source_attributed_jsonl():
+    from app.core import build_raw_corpus_text, load_source_advice_entries
+
+    entries = load_source_advice_entries()
+    corpus = build_raw_corpus_text()
+    assert len(entries) == 20
+    assert all(entry["source_name"] and entry["source_url"].startswith("https://") for entry in entries)
+    assert corpus.count(" SOURCE: ") == 20
+    assert "TNAU Agritech" in corpus
+    assert "ICAR - Kharif Agro-Advisories" in corpus
+
+
 def test_milestone_2():
     result = milestone_2()
     assert result["status"] == "completed"
