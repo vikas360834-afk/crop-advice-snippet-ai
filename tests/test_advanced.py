@@ -314,3 +314,32 @@ def test_cli_advanced_commands(capsys):
     main(["feedback", "--stats"])
     out = capsys.readouterr().out
     assert "FARMER FEEDBACK ANALYTICS" in out
+
+
+def test_dataset_batch_includes_valid_shifted_targets_and_rejects_tiny_input():
+    from app.core import AgriculturalDataset
+    dataset = AgriculturalDataset(list(range(6)), block_size=4)
+    x, y = dataset.get_batch(batch_size=32)
+    assert x.shape == (32, 4)
+    assert y.shape == (32, 4)
+    assert torch.all(x[:, 1:] == y[:, :-1])
+    assert int(x.max()) <= 5
+    with pytest.raises(ValueError, match="At least two tokens"):
+        AgriculturalDataset([1], block_size=4).get_batch(1)
+
+
+def test_training_validates_arguments_and_writes_checkpoint(tmp_path, monkeypatch):
+    from app.core import GPTLanguageModel, train_gpt_model
+    import app.core as core
+    monkeypatch.setattr(core, "TRAINING_HISTORY_PATH", tmp_path / "history.json")
+    model = GPTLanguageModel(vocab_size=20, n_embd=16, n_head=2, n_layer=1, block_size=8)
+    checkpoint = tmp_path / "model.pt"
+    result = train_gpt_model(
+        model, list(range(20)) * 5, epochs=3, batch_size=2,
+        save_path=checkpoint, seed=7,
+    )
+    assert checkpoint.exists()
+    assert result["epochs"] == 3
+    assert result["val_losses"]
+    with pytest.raises(ValueError, match="epochs"):
+        train_gpt_model(model, list(range(30)), epochs=0)
