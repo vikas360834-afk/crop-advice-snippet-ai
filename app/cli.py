@@ -13,7 +13,6 @@ Supports:
 - feedback: Farmer rating and feedback collection
 - stats: Legacy corpus statistics
 - interactive: Terminal-based assistant loop
-- hello: Verification check
 """
 
 from __future__ import annotations
@@ -36,7 +35,6 @@ from app.feedback import FarmerFeedback, FeedbackManager
 from app.knowledge.pests import search_pests
 from app.records import AgriculturalRecord, RecordManager
 from app.soil_intel import SoilRecord
-from app.storage import Store
 from app.weather_intel import WeatherRecord
 
 
@@ -46,9 +44,6 @@ def create_parser() -> argparse.ArgumentParser:
         description="Crop Advice Snippet AI: Context-aware agricultural intelligence powered by custom GPT and 120+ crop registry.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-
-    # 1. Hello
-    sub.add_parser("hello", help="Check that everything is wired up")
 
     # 2. Crops (120+ Crops Registry)
     crops_p = sub.add_parser("crops", help="Multi-crop registry and agronomic search for 120+ crops")
@@ -482,7 +477,6 @@ def handle_soil(args: argparse.Namespace) -> None:
 
 def handle_feedback(args: argparse.Namespace) -> None:
     fb_mgr = FeedbackManager()
-    store = Store()
 
     if args.stats:
         analytics = fb_mgr.get_analytics()
@@ -506,10 +500,6 @@ def handle_feedback(args: argparse.Namespace) -> None:
         )
         fb_mgr.add(record)
 
-        fb_key = f"feedback_{args.crop.lower()}"
-        existing = store.get(fb_key, [])
-        existing.append({"rating": args.rating, "comment": args.comment})
-        store.put(fb_key, existing)
 
         print(f"Thank you! Recorded {args.rating}-star feedback for {args.crop}.")
     else:
@@ -558,9 +548,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser = create_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "hello":
-        print("Crop Advice Snippet AI is ready. Open README.md for your milestones.")
-    elif args.command == "crops":
+    if args.command == "crops":
         handle_crops(args)
     elif args.command == "disease":
         handle_disease(args)
