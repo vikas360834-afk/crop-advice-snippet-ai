@@ -1,6 +1,8 @@
 ﻿"""Create a small sample records file so the records CLI and tests have data.
 
-Run from the project root:  python tools/seed_sample_records.py
+Each advice text is limited to what its cited source says.
+
+Run from the project root:  python -m tools.seed_sample_records
 """
 
 from app.records import AgriculturalRecord, RecordManager
@@ -10,12 +12,11 @@ SAMPLES = [
         id="tomato-001",
         crop="Tomato",
         topic="Disease",
-        advice="Remove infected leaves and apply a copper-based fungicide at first symptoms of early blight.",
-        source_name="ICAR-IIHR Bengaluru",
-        source_url="https://icar-iihr.org.in",
-        symptoms="Concentric brown rings on lower leaves",
+        advice="At the first symptoms of early blight, spray a registered fungicide such as propineb or a tebuconazole-based product, and follow the label dose and interval.",
+        source_name="Plant Archives: early blight fungicide evaluation",
+        source_url="https://www.plantarchives.org/",
         severity="High",
-        confidence=0.90,
+        confidence=0.80,
         tags=["disease", "fungal"],
         review_status="reviewed",
     ),
@@ -23,11 +24,11 @@ SAMPLES = [
         id="tomato-002",
         crop="Tomato",
         topic="Irrigation",
-        advice="Irrigate at regular intervals with drip systems; avoid waterlogging to reduce fruit cracking.",
+        advice="Irrigate at regular intervals, about every 8 to 12 days, to keep the water supply even. Drip irrigation is economical and suits tomato. Avoid long dry spells followed by sudden heavy irrigation, which can crack the fruit.",
         source_name="TNAU Agritech Portal",
-        source_url="https://agritech.tnau.ac.in",
+        source_url="https://agritech.tnau.ac.in/org_farm/orgfarm_tomato_water.html",
         severity="Medium",
-        confidence=0.88,
+        confidence=0.85,
         tags=["irrigation", "water"],
         review_status="reviewed",
     ),
