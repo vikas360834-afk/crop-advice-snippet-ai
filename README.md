@@ -78,3 +78,12 @@ Spraying Window: UNFAVOURABLE: Postpone spraying. Rainfall imminent; applied che
 ```
 
 The weather advisory uses only the values you type in and fixed rules. It does not fetch live weather.
+
+## Origin
+
+This project started from a course starter template, which provided the milestone structure, the CI workflow, and the test scaffolding. The crop registry data, disease and pest database, records store, weather and soil checks, and CLI commands were written for this project.
+
+## Evaluation
+
+- **Automated tests:** 20 tests cover the CLI, the crop registry, the records store, and the tokenizer and embedding code. They run on every push in GitHub Actions.
+- **Model accuracy:** not measured yet. The `advice` command returns stored records, so its output does not show how well the GPT model performs. Measuring the model would mean training it with `python -m app.cli train` and scoring its answers to a fixed set of questions. That has not been done.
