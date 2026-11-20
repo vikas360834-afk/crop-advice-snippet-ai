@@ -325,11 +325,7 @@ class EmbeddingLayer(nn.Module):
 
 
 def get_trained_tokenizer(corpus_text: Optional[str] = None, vocab_size: int = 420) -> BPETokenizer:
-    """Helper to train or load a BPE tokenizer on the agricultural text."""
-    if TOKENIZER_DEFAULT_PATH.exists():
-        tok = BPETokenizer(vocab_size=vocab_size)
-        tok.load(TOKENIZER_DEFAULT_PATH)
-        return tok
+    """Train a deterministic BPE tokenizer from the supplied trusted corpus."""
     if corpus_text is None:
         corpus_text = build_training_text_from_records()
     tok = BPETokenizer(vocab_size=vocab_size)
@@ -746,7 +742,7 @@ def load_or_train_model(
 
 def milestone_4() -> Dict[str, Any]:
     """Milestone 4: Train the GPT model using the agricultural text data."""
-    corpus = load_or_create_corpus()
+    corpus = build_training_text_from_records()
     tokenizer = get_trained_tokenizer(corpus, vocab_size=380)
     tokens = tokenizer.encode(corpus)
 
