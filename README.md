@@ -6,7 +6,7 @@ A command-line tool that gives short, crop-specific agricultural advice. It comb
 
 ```bash
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -c requirements-lock.txt
 python tools/generate_crop_registry.py   # builds data/crops/crop_registry.json
 python -m tools.seed_sample_records      # writes two sample tomato records
 pytest -q
@@ -63,7 +63,7 @@ The GPT model is trained only from the 20-row attributed JSONL dataset. Each tra
 ## Evaluation
 
 - **Automated tests:** Pytest covers corpus formatting, tokenizer round-trips, causal masking, transformer shapes, training, CLI commands, crop-registry lookup, disease/pest search, records, weather/soil rules, feedback analytics, and source-dataset metadata. GitHub Actions runs `pytest -q` on pushes and pull requests.
-- **Dataset metadata audit:** `python -m tools.validate_source_dataset` checks the 20-row attributed JSONL dataset for parse errors, required fields, duplicate IDs, HTTPS source links, and missing publication dates. Missing dates are reported, never guessed. See [data/README.md](data/README.md).
+- **Dataset metadata audit:** `python -m tools.validate_source_dataset` checks the 20-row attributed JSONL dataset for parse errors, required fields, duplicate IDs, HTTPS source links, and missing publication dates. Missing dates are reported, never guessed. See [data/README.md](data/README.md) and the [record-level source register](data/SOURCES.md).
 - **Where answers come from:** `python -m tools.measure_advice` labels 10 fixed queries by answer source (model, stored record, generic fallback, or empty). This is a routing metric, not a factual-accuracy score. Run it locally to regenerate `results/measure_advice.csv`.
 - **Quality (source-checked):** all 8 model and record answers were checked against published guidance by an AI assistant, not an expert. The two tomato records were rewritten to match their sources, so their pass reflects the rewritten text, not the model.
 
@@ -97,7 +97,7 @@ Notes on the partial answers: the rice advice applies granules during moth fligh
 
 This project started from a course starter template, which provided the milestone structure, the CI workflow, and the test scaffolding. The crop registry data, disease and pest database, records store, weather checks, and CLI commands were written for this project.
 
-## Local data files
+## Reproducible dependencies\n\nDirect dependencies are pinned in `requirements.txt`. `requirements-lock.txt` pins the resolved transitive dependencies used by CI. Install with `pip install -r requirements.txt -c requirements-lock.txt`. The lock constraints include Linux-only CUDA packages only on Linux, so they are not forced onto Windows or macOS. The supported Python minor version is 3.12.\n\n## Local data files
 
 The feedback command keeps structured submissions in `data/farmer_feedback.jsonl`. Runtime data is ignored by git; only the attributed source dataset and documentation are tracked; the trusted training text is regenerated from JSONL.
 
